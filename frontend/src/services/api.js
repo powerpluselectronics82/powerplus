@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+const rawBaseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+const baseURL =
+  rawBaseURL.startsWith('http') && !rawBaseURL.endsWith('/api')
+    ? `${rawBaseURL.replace(/\/+$/, '')}/api`
+    : rawBaseURL;
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -24,6 +30,11 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      window.dispatchEvent(new Event('auth:unauthorized'));
+    }
     const message =
       error.response?.data?.message ||
       error.message ||

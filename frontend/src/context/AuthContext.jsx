@@ -12,6 +12,14 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [otpUser, setOtpUser] = useState(null); // When OTP verification is required
 
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      setUser(null);
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
   const login = async (email, password) => {
     setLoading(true);
     try {
@@ -19,6 +27,10 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.data);
         localStorage.setItem('user', JSON.stringify(response.data));
+        const token = response.token || response.data?.token;
+        if (token) {
+          localStorage.setItem('token', token);
+        }
         return { success: true, data: response.data };
       }
       return { success: false, message: response.message || 'Login failed' };

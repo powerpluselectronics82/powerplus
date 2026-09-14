@@ -408,15 +408,15 @@ const login = async (req, res) => {
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: true,
+      sameSite: "none",
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
     return res.status(200).json({
       success: true,
       message: "Login successful",
-
+      token,
       data: {
         userId: user._id,
         name: user.name,
@@ -425,6 +425,7 @@ const login = async (req, res) => {
         role: user.role,
         companyId: user.companyId,
         branchId: user.branchId,
+        token,
       },
     });
 
