@@ -54,6 +54,9 @@ app.use((err, req, res, next) => {
     ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
   });
 });
+app.get("/", (req, res) => {
+  res.send("Welcome to the API");
+});
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
