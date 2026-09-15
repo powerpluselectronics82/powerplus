@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Boxes, Barcode, Calendar, Percent, Hash, AlertCircle, FileText, Search, Check, ChevronDown } from 'lucide-react';
+import { X, Plus, Boxes, Barcode, Calendar, Percent, Hash, AlertCircle, FileText, Check, ChevronDown } from 'lucide-react';
 import { productService } from '../../services/productService';
 import { useBranch } from '../../context/BranchContext';
 
@@ -343,10 +343,9 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                   }}
                   onKeyDown={handleSearchKeyDown}
                   placeholder="Search product by name or barcode..."
-                  className="input-tactile pl-9 pr-8 font-semibold text-xs bg-white"
+                  className="input-tactile pl-3.5 pr-8 font-semibold text-xs bg-white"
                   required={!selectedProduct}
                 />
-                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
                 {productSearch ? (
                   <button
                     type="button"
@@ -412,11 +411,13 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                           </div>
 
                           <div className="text-right shrink-0">
-                            <span className="font-mono font-extrabold text-indigo-600 block text-xs">
-                              ₹{Number(p.mrp || 0).toLocaleString('en-IN')}
-                            </span>
+                            {Number(p.mrp) > 0 && (
+                              <span className="font-mono font-extrabold text-indigo-600 block text-xs">
+                                ₹{Number(p.mrp).toLocaleString('en-IN')}
+                              </span>
+                            )}
                             {isSelected && (
-                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 justify-end mt-0.5">
+                              <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 justify-end">
                                 <Check className="w-3 h-3" /> Selected
                               </span>
                             )}
