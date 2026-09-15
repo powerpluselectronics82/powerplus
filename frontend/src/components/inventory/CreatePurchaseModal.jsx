@@ -164,18 +164,13 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
                     </div>
                   </div>
 
-                  <div className="text-right shrink-0">
-                    {Number(p.mrp) > 0 && (
-                      <span className="font-mono font-extrabold text-indigo-600 block text-xs">
-                        ₹{Number(p.mrp).toLocaleString('en-IN')}
-                      </span>
-                    )}
-                    {isSelected && (
+                  {isSelected && (
+                    <div className="text-right shrink-0">
                       <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 justify-end">
                         <Check className="w-3 h-3" /> Selected
                       </span>
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -197,7 +192,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({
     supplierId: '',
     supplierName: '',
-    purchaseInvoiceNumber: `PUR-${Date.now().toString().slice(-6)}`,
+    purchaseInvoiceNumber: '',
     purchaseDate: new Date().toISOString().split('T')[0],
     paymentStatus: 'PAID',
   });
@@ -208,7 +203,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
       barcode: '',
       name: '',
       quantity: 1,
-      purchasePrice: 0,
+      purchasePrice: '',
       mrp: 0,
       cgstRate: 9,
       sgstRate: 9,
@@ -218,6 +213,25 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
   useEffect(() => {
     if (isOpen) {
       fetchInitialData();
+      setFormData({
+        supplierId: '',
+        supplierName: '',
+        purchaseInvoiceNumber: '',
+        purchaseDate: new Date().toISOString().split('T')[0],
+        paymentStatus: 'PAID',
+      });
+      setItems([
+        {
+          productId: '',
+          barcode: '',
+          name: '',
+          quantity: 1,
+          purchasePrice: '',
+          mrp: 0,
+          cgstRate: 9,
+          sgstRate: 9,
+        },
+      ]);
     }
   }, [isOpen, selectedBranchId]);
 
@@ -268,7 +282,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         name: found.name,
         hsnCode: found.hsnCode || '',
         modelNumber: found.modelNumber || '',
-        purchasePrice: found.purchasePrice || updated[index].purchasePrice || 0,
+        purchasePrice: updated[index].purchasePrice !== '' ? updated[index].purchasePrice : '',
         mrp: found.mrp || 0,
         cgstRate: found.cgstRate ?? 9,
         sgstRate: found.sgstRate ?? 9,
@@ -308,7 +322,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         hsnCode: '',
         modelNumber: '',
         quantity: 1,
-        purchasePrice: 0,
+        purchasePrice: '',
         mrp: 0,
         cgstRate: 9,
         sgstRate: 9,
@@ -493,7 +507,8 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                     type="text"
                     value={formData.purchaseInvoiceNumber}
                     onChange={(e) => setFormData({ ...formData, purchaseInvoiceNumber: e.target.value })}
-                    className="tactile-input text-xs w-full font-mono"
+                    placeholder="Enter Invoice / Bill #..."
+                    className="tactile-input text-xs w-full font-mono font-semibold"
                     required
                   />
                 </div>
@@ -589,7 +604,8 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                             min="0"
                             value={item.purchasePrice}
                             onChange={(e) => handleItemChange(idx, 'purchasePrice', e.target.value)}
-                            className="tactile-input text-xs w-full font-mono"
+                            placeholder="0.00"
+                            className="tactile-input text-xs w-full font-mono font-semibold"
                             required
                           />
                         </div>
