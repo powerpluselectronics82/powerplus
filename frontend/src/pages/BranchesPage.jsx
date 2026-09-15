@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { branchService } from '../services/branchService';
 import { userService } from '../services/userService';
 import { useAuth } from '../context/AuthContext';
-import { GitBranch, Plus, UserCheck, Phone, MapPin, X, Building2, AlertTriangle, RefreshCw, Mail, Clock, CreditCard } from 'lucide-react';
+import { GitBranch, Plus, UserCheck, Phone, MapPin, X, Building2, AlertTriangle, RefreshCw, Mail, Clock, CreditCard, Trash2 } from 'lucide-react';
 
 const renderSafeString = (val, fallback = '') => {
   if (val === null || val === undefined) return fallback;
@@ -38,14 +38,58 @@ export const BranchesPage = () => {
   const [addForm, setAddForm] = useState({
     name: '',
     address: '',
-    phone: '',
-    email: '',
     gstin: '',
     openingTime: '09:00',
     closingTime: '21:00',
     openDays: 'Mon, Tue, Wed, Thu, Fri, Sat',
     establishmentDate: '',
   });
+
+  const [phoneList, setPhoneList] = useState([
+    { number: '', type: 'PRIMARY' }
+  ]);
+  const [emailList, setEmailList] = useState([
+    { address: '', type: 'PRIMARY' }
+  ]);
+
+  const addPhoneRow = () => {
+    setPhoneList((prev) => [...prev, { number: '', type: 'SECONDARY' }]);
+  };
+
+  const removePhoneRow = (index) => {
+    setPhoneList((prev) => {
+      if (prev.length <= 1) return [{ number: '', type: 'PRIMARY' }];
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const updatePhoneRow = (index, field, value) => {
+    setPhoneList((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const addEmailRow = () => {
+    setEmailList((prev) => [...prev, { address: '', type: 'SECONDARY' }]);
+  };
+
+  const removeEmailRow = (index) => {
+    setEmailList((prev) => {
+      if (prev.length <= 1) return [{ address: '', type: 'PRIMARY' }];
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const updateEmailRow = (index, field, value) => {
+    setEmailList((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
 
@@ -88,21 +132,58 @@ export const BranchesPage = () => {
         ? addForm.openDays.split(',').map((d) => d.trim()).filter(Boolean)
         : addForm.openDays;
 
+      // Extract and format valid phones
+      const formattedPhones = [];
+      phoneList.forEach((p) => {
+        if (!p.number) return;
+        const parts = String(p.number).split(',').map((n) => n.trim()).filter(Boolean);
+        parts.forEach((num, idx) => {
+          formattedPhones.push({
+            number: num,
+            type: idx === 0 ? p.type || 'PRIMARY' : 'SECONDARY',
+          });
+        });
+      });
+
+      // Extract and format valid emails
+      const formattedEmails = [];
+      emailList.forEach((e) => {
+        if (!e.address) return;
+        const parts = String(e.address).split(',').map((a) => a.trim().toLowerCase()).filter(Boolean);
+        parts.forEach((addr, idx) => {
+          formattedEmails.push({
+            address: addr,
+            type: idx === 0 ? e.type || 'PRIMARY' : 'SECONDARY',
+          });
+        });
+      });
+
       const res = await branchService.addBranch({
         companyId,
         name: addForm.name,
         address: addForm.address,
-        phone: addForm.phone ? [{ number: addForm.phone, type: 'PRIMARY' }] : [],
-        email: addForm.email ? [{ address: addForm.email, type: 'PRIMARY' }] : [],
+        phone: formattedPhones,
+        email: formattedEmails,
         gstin: addForm.gstin,
         openingTime: addForm.openingTime,
         closingTime: addForm.closingTime,
         openDays: openDaysArray,
         establishmentDate: addForm.establishmentDate || undefined,
       });
+
       if (res.success) {
         setIsAddModalOpen(false);
-        setAddForm({ name: '', address: '', phone: '', email: '', gstin: '', openingTime: '09:00', closingTime: '21:00', openDays: 'Mon, Tue, Wed, Thu, Fri, Sat', establishmentDate: '' });
+        setAddForm({
+          name: '',
+          address: '',
+          gstin: '',
+          openingTime: '09:00',
+          closingTime: '21:00',
+          openDays: 'Mon, Tue, Wed, Thu, Fri, Sat',
+          establishmentDate: '',
+        });
+        setPhoneList([{ number: '', type: 'PRIMARY' }]);
+        setEmailList([{ address: '', type: 'PRIMARY' }]);
         loadBranches();
       }
     } catch (err) {
@@ -294,18 +375,55 @@ export const BranchesPage = () => {
                         <span className="leading-snug text-slate-800 font-medium">{addressStr}</span>
                       </div>
                     )}
-                    {Boolean(phoneStr) && (
+                    {Array.isArray(branch.phone) && branch.phone.length > 0 ? (
+                      <div className="flex items-start gap-2">
+                        <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-1" />
+                        <div className="flex flex-wrap gap-1">
+                          {branch.phone.map((p, pIdx) => {
+                            const num = typeof p === 'object' ? p.number : p;
+                            const type = typeof p === 'object' ? p.type : null;
+                            return (
+                              <span key={pIdx} className="font-mono text-slate-800 font-bold text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
+                                {num}
+                                {type && type !== 'PRIMARY' && (
+                                  <span className="text-[9px] text-indigo-600 font-bold uppercase">({type})</span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : Boolean(phoneStr) ? (
                       <div className="flex items-center gap-2">
                         <Phone className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                         <span className="font-mono text-slate-800 font-bold">{phoneStr}</span>
                       </div>
-                    )}
-                    {Boolean(emailStr) && (
+                    ) : null}
+
+                    {Array.isArray(branch.email) && branch.email.length > 0 ? (
+                      <div className="flex items-start gap-2">
+                        <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-1" />
+                        <div className="flex flex-wrap gap-1">
+                          {branch.email.map((e, eIdx) => {
+                            const addr = typeof e === 'object' ? e.address : e;
+                            const type = typeof e === 'object' ? e.type : null;
+                            return (
+                              <span key={eIdx} className="font-mono text-slate-700 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
+                                {addr}
+                                {type && type !== 'PRIMARY' && (
+                                  <span className="text-[9px] text-slate-500 font-normal uppercase">({type})</span>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ) : Boolean(emailStr) ? (
                       <div className="flex items-center gap-2">
                         <Mail className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
                         <span className="font-mono text-slate-700 truncate">{emailStr}</span>
                       </div>
-                    )}
+                    ) : null}
                     {(Boolean(branch.openingTime) || Boolean(branch.closingTime)) && (
                       <div className="flex items-center gap-2">
                         <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
@@ -360,7 +478,7 @@ export const BranchesPage = () => {
       {/* Add Branch Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 relative">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 relative">
             <button
               onClick={() => setIsAddModalOpen(false)}
               className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg"
@@ -372,7 +490,7 @@ export const BranchesPage = () => {
               Create New Branch
             </h3>
             <p className="text-xs text-slate-500 mb-4">
-              Enter location name, contact details, and GSTIN info (Branch Code auto-generated)
+              Enter location name, multiple contacts, operating hours, and GSTIN info (Branch Code auto-generated)
             </p>
 
             {addError && (
@@ -381,7 +499,7 @@ export const BranchesPage = () => {
               </div>
             )}
 
-            <form onSubmit={handleAddBranchSubmit} className="space-y-3 text-xs">
+            <form onSubmit={handleAddBranchSubmit} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1">
                   Branch Name *
@@ -391,7 +509,7 @@ export const BranchesPage = () => {
                   required
                   value={addForm.name}
                   onChange={(e) => setAddForm({ ...addForm, name: e.target.value })}
-                  placeholder="Downtown Store"
+                  placeholder="e.g. Downtown Store"
                   className="input-tactile"
                 />
               </div>
@@ -404,36 +522,123 @@ export const BranchesPage = () => {
                   type="text"
                   value={addForm.address}
                   onChange={(e) => setAddForm({ ...addForm, address: e.target.value })}
-                  placeholder="123 Main Street"
+                  placeholder="e.g. 123 Main Street, Sector 15"
                   className="input-tactile"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    Phone
+              {/* Multiple Phone Numbers Section */}
+              <div className="space-y-2 p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 uppercase flex items-center gap-1.5 text-[11px]">
+                    <Phone className="w-3.5 h-3.5 text-indigo-600" />
+                    Phone Numbers
                   </label>
-                  <input
-                    type="text"
-                    value={addForm.phone}
-                    onChange={(e) => setAddForm({ ...addForm, phone: e.target.value })}
-                    placeholder="9876543210"
-                    className="input-tactile"
-                  />
+                  <button
+                    type="button"
+                    onClick={addPhoneRow}
+                    className="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" /> Add Phone
+                  </button>
                 </div>
-                <div>
-                  <label className="block font-bold text-slate-700 uppercase mb-1">
-                    GSTIN
+
+                <div className="space-y-2">
+                  {phoneList.map((p, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={p.number}
+                        onChange={(e) => updatePhoneRow(idx, 'number', e.target.value)}
+                        placeholder="e.g. 9876543210"
+                        className="input-tactile flex-1"
+                      />
+                      <select
+                        value={p.type}
+                        onChange={(e) => updatePhoneRow(idx, 'type', e.target.value)}
+                        className="input-tactile w-32 font-medium"
+                      >
+                        <option value="PRIMARY">Primary</option>
+                        <option value="SECONDARY">Secondary</option>
+                        <option value="WHATSAPP">WhatsApp</option>
+                      </select>
+                      {phoneList.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removePhoneRow(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Remove phone"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Multiple Email Addresses Section */}
+              <div className="space-y-2 p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-700 uppercase flex items-center gap-1.5 text-[11px]">
+                    <Mail className="w-3.5 h-3.5 text-indigo-600" />
+                    Email Addresses
                   </label>
-                  <input
-                    type="text"
-                    value={addForm.gstin}
-                    onChange={(e) => setAddForm({ ...addForm, gstin: e.target.value })}
-                    placeholder="22AAAAA0000A1Z5"
-                    className="input-tactile font-mono"
-                  />
+                  <button
+                    type="button"
+                    onClick={addEmailRow}
+                    className="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                  >
+                    <Plus className="w-3 h-3" /> Add Email
+                  </button>
                 </div>
+
+                <div className="space-y-2">
+                  {emailList.map((e, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="email"
+                        value={e.address}
+                        onChange={(ev) => updateEmailRow(idx, 'address', ev.target.value)}
+                        placeholder="e.g. branch@powerplus.com"
+                        className="input-tactile flex-1"
+                      />
+                      <select
+                        value={e.type}
+                        onChange={(ev) => updateEmailRow(idx, 'type', ev.target.value)}
+                        className="input-tactile w-32 font-medium"
+                      >
+                        <option value="PRIMARY">Primary</option>
+                        <option value="SECONDARY">Secondary</option>
+                        <option value="SUPPORT">Support</option>
+                        <option value="SALES">Sales</option>
+                      </select>
+                      {emailList.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeEmailRow(idx)}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                          title="Remove email"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 uppercase mb-1">
+                  GSTIN
+                </label>
+                <input
+                  type="text"
+                  value={addForm.gstin}
+                  onChange={(e) => setAddForm({ ...addForm, gstin: e.target.value })}
+                  placeholder="e.g. 22AAAAA0000A1Z5"
+                  className="input-tactile font-mono"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded-xl border border-slate-200/80">

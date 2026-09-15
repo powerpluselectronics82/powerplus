@@ -60,68 +60,82 @@ const addBranch = async (req, res) => {
     }
 
     // --------------------------------------------------
-    // 3. Validate phone array
+    // 3. Normalize & Validate phone array
     // --------------------------------------------------
-
-    if (phone !== undefined) {
-      if (!Array.isArray(phone)) {
+    let normalizedPhone = [];
+    if (phone !== undefined && phone !== null) {
+      if (typeof phone === "string") {
+        normalizedPhone = phone
+          .split(",")
+          .map((n) => n.trim())
+          .filter(Boolean)
+          .map((n, i) => ({
+            number: n,
+            type: i === 0 ? "PRIMARY" : "SECONDARY",
+          }));
+      } else if (Array.isArray(phone)) {
+        const allowedPhoneTypes = ["PRIMARY", "SECONDARY", "WHATSAPP"];
+        normalizedPhone = phone
+          .map((item, i) => {
+            if (typeof item === "string") {
+              return { number: item.trim(), type: i === 0 ? "PRIMARY" : "SECONDARY" };
+            }
+            const rawType = item.type ? String(item.type).toUpperCase() : "";
+            return {
+              number: String(item.number || "").trim(),
+              type: allowedPhoneTypes.includes(rawType)
+                ? rawType
+                : i === 0
+                ? "PRIMARY"
+                : "SECONDARY",
+            };
+          })
+          .filter((item) => Boolean(item.number));
+      } else {
         return res.status(400).json({
           success: false,
-          message: "phone must be an array",
+          message: "phone must be an array or string",
         });
-      }
-
-      for (const item of phone) {
-        if (!item.number) {
-          return res.status(400).json({
-            success: false,
-            message: "Each phone must contain a number",
-          });
-        }
-
-        if (
-          item.type &&
-          !["PRIMARY", "SECONDARY", "WHATSAPP"].includes(item.type)
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid phone type. Allowed: PRIMARY, SECONDARY, WHATSAPP",
-          });
-        }
       }
     }
 
     // --------------------------------------------------
-    // 4. Validate email array
+    // 4. Normalize & Validate email array
     // --------------------------------------------------
-
-    if (email !== undefined) {
-      if (!Array.isArray(email)) {
+    let normalizedEmail = [];
+    if (email !== undefined && email !== null) {
+      if (typeof email === "string") {
+        normalizedEmail = email
+          .split(",")
+          .map((e) => e.trim().toLowerCase())
+          .filter(Boolean)
+          .map((e, i) => ({
+            address: e,
+            type: i === 0 ? "PRIMARY" : "SECONDARY",
+          }));
+      } else if (Array.isArray(email)) {
+        const allowedEmailTypes = ["PRIMARY", "SECONDARY", "SUPPORT", "SALES"];
+        normalizedEmail = email
+          .map((item, i) => {
+            if (typeof item === "string") {
+              return { address: item.trim().toLowerCase(), type: i === 0 ? "PRIMARY" : "SECONDARY" };
+            }
+            const rawType = item.type ? String(item.type).toUpperCase() : "";
+            return {
+              address: String(item.address || "").trim().toLowerCase(),
+              type: allowedEmailTypes.includes(rawType)
+                ? rawType
+                : i === 0
+                ? "PRIMARY"
+                : "SECONDARY",
+            };
+          })
+          .filter((item) => Boolean(item.address));
+      } else {
         return res.status(400).json({
           success: false,
-          message: "email must be an array",
+          message: "email must be an array or string",
         });
-      }
-
-      for (const item of email) {
-        if (!item.address) {
-          return res.status(400).json({
-            success: false,
-            message: "Each email must contain an address",
-          });
-        }
-
-        if (
-          item.type &&
-          !["PRIMARY", "SECONDARY", "SUPPORT", "SALES"].includes(item.type)
-        ) {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Invalid email type. Allowed: PRIMARY, SECONDARY, SUPPORT, SALES",
-          });
-        }
       }
     }
 
@@ -174,8 +188,8 @@ const addBranch = async (req, res) => {
 
       address,
 
-      phone,
-      email,
+      phone: normalizedPhone,
+      email: normalizedEmail,
 
       gstin,
 
