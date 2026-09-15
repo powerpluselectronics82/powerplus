@@ -535,101 +535,135 @@ export const BranchesPage = () => {
               </div>
 
               {/* Multiple Phone Numbers Section */}
-              <div className="space-y-2 p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 uppercase flex items-center gap-1.5 text-[11px]">
-                    <Phone className="w-3.5 h-3.5 text-indigo-600" />
-                    Phone Numbers
-                  </label>
+              <div className="space-y-2.5 p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/80">
+                  <div className="flex items-center gap-1.5">
+                    <Phone className="w-4 h-4 text-indigo-600" />
+                    <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">
+                      Branch Phone Numbers
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={addPhoneRow}
-                    className="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] border border-indigo-200 transition-colors cursor-pointer"
                   >
-                    <Plus className="w-3 h-3" /> Add Phone
+                    <Plus className="w-3.5 h-3.5" /> Add Another Phone
                   </button>
+                </div>
+
+                {/* Column Headers */}
+                <div className="grid grid-cols-12 gap-2 px-1 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <span className="col-span-7 sm:col-span-8">Contact Number *</span>
+                  <span className="col-span-4 sm:col-span-3">Phone Type</span>
+                  <span className="col-span-1 text-center">Del</span>
                 </div>
 
                 <div className="space-y-2">
                   {phoneList.map((p, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={p.number}
-                        onChange={(e) => updatePhoneRow(idx, 'number', e.target.value)}
-                        placeholder="e.g. 9876543210"
-                        className="input-tactile flex-1"
-                      />
-                      <select
-                        value={p.type}
-                        onChange={(e) => updatePhoneRow(idx, 'type', e.target.value)}
-                        className="input-tactile w-32 font-medium"
-                      >
-                        <option value="PRIMARY">Primary</option>
-                        <option value="SECONDARY">Secondary</option>
-                        <option value="WHATSAPP">WhatsApp</option>
-                      </select>
-                      {phoneList.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removePhoneRow(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="Remove phone"
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-7 sm:col-span-8">
+                        <input
+                          type="tel"
+                          value={p.number}
+                          onChange={(e) => updatePhoneRow(idx, 'number', e.target.value)}
+                          placeholder="e.g. 9876543210"
+                          className="w-full px-3 py-2 text-xs font-mono font-bold bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm placeholder:text-slate-400"
+                        />
+                      </div>
+                      <div className="col-span-4 sm:col-span-3">
+                        <select
+                          value={p.type}
+                          onChange={(e) => updatePhoneRow(idx, 'type', e.target.value)}
+                          className="w-full px-2.5 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+                          <option value="PRIMARY">Primary</option>
+                          <option value="SECONDARY">Secondary</option>
+                          <option value="WHATSAPP">WhatsApp</option>
+                        </select>
+                      </div>
+                      <div className="col-span-1 flex justify-center">
+                        {phoneList.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removePhoneRow(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Remove this phone"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 text-xs font-mono">-</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Multiple Email Addresses Section */}
-              <div className="space-y-2 p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80">
-                <div className="flex items-center justify-between">
-                  <label className="font-bold text-slate-700 uppercase flex items-center gap-1.5 text-[11px]">
-                    <Mail className="w-3.5 h-3.5 text-indigo-600" />
-                    Email Addresses
-                  </label>
+              <div className="space-y-2.5 p-3.5 bg-slate-50/90 rounded-2xl border border-slate-200 shadow-sm">
+                <div className="flex items-center justify-between pb-1 border-b border-slate-200/80">
+                  <div className="flex items-center gap-1.5">
+                    <Mail className="w-4 h-4 text-indigo-600" />
+                    <span className="font-extrabold text-slate-800 text-xs uppercase tracking-wider">
+                      Branch Email Addresses
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={addEmailRow}
-                    className="text-indigo-600 hover:text-indigo-800 font-bold text-[11px] flex items-center gap-1 cursor-pointer"
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold text-[11px] border border-indigo-200 transition-colors cursor-pointer"
                   >
-                    <Plus className="w-3 h-3" /> Add Email
+                    <Plus className="w-3.5 h-3.5" /> Add Another Email
                   </button>
+                </div>
+
+                {/* Column Headers */}
+                <div className="grid grid-cols-12 gap-2 px-1 text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">
+                  <span className="col-span-7 sm:col-span-8">Email Address *</span>
+                  <span className="col-span-4 sm:col-span-3">Email Type</span>
+                  <span className="col-span-1 text-center">Del</span>
                 </div>
 
                 <div className="space-y-2">
                   {emailList.map((e, idx) => (
-                    <div key={idx} className="flex items-center gap-2">
-                      <input
-                        type="email"
-                        value={e.address}
-                        onChange={(ev) => updateEmailRow(idx, 'address', ev.target.value)}
-                        placeholder="e.g. branch@powerplus.com"
-                        className="input-tactile flex-1"
-                      />
-                      <select
-                        value={e.type}
-                        onChange={(ev) => updateEmailRow(idx, 'type', ev.target.value)}
-                        className="input-tactile w-32 font-medium"
-                      >
-                        <option value="PRIMARY">Primary</option>
-                        <option value="SECONDARY">Secondary</option>
-                        <option value="SUPPORT">Support</option>
-                        <option value="SALES">Sales</option>
-                      </select>
-                      {emailList.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeEmailRow(idx)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
-                          title="Remove email"
+                    <div key={idx} className="grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-7 sm:col-span-8">
+                        <input
+                          type="email"
+                          value={e.address}
+                          onChange={(ev) => updateEmailRow(idx, 'address', ev.target.value)}
+                          placeholder="e.g. branch@powerplus.com"
+                          className="w-full px-3 py-2 text-xs font-mono bg-white text-slate-900 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm placeholder:text-slate-400"
+                        />
+                      </div>
+                      <div className="col-span-4 sm:col-span-3">
+                        <select
+                          value={e.type}
+                          onChange={(ev) => updateEmailRow(idx, 'type', ev.target.value)}
+                          className="w-full px-2.5 py-2 text-xs font-bold bg-white text-slate-700 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
+                          <option value="PRIMARY">Primary</option>
+                          <option value="SECONDARY">Secondary</option>
+                          <option value="SUPPORT">Support</option>
+                          <option value="SALES">Sales</option>
+                        </select>
+                      </div>
+                      <div className="col-span-1 flex justify-center">
+                        {emailList.length > 1 ? (
+                          <button
+                            type="button"
+                            onClick={() => removeEmailRow(idx)}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                            title="Remove this email"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 text-xs font-mono">-</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
