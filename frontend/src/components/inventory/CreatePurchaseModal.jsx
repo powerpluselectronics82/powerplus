@@ -1,9 +1,190 @@
-import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, ShoppingBag, Truck, Calendar, Hash, Calculator } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  X,
+  Plus,
+  Trash2,
+  ShoppingBag,
+  Truck,
+  Calendar,
+  Hash,
+  Calculator,
+  Barcode,
+  Check,
+  ChevronDown,
+} from 'lucide-react';
 import { supplierService } from '../../services/supplierService';
 import { productService } from '../../services/productService';
 import { purchaseService } from '../../services/purchaseService';
 import { useBranch } from '../../context/BranchContext';
+
+// Searchable Product Combobox for Purchase Invoice rows
+const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState(
+    item.name ? `${item.name}${item.barcode ? ` (${item.barcode})` : ''}` : ''
+  );
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    if (item.productId && item.name) {
+      setSearchTerm(`${item.name}${item.barcode ? ` (${item.barcode})` : ''}`);
+    } else if (!item.productId) {
+      setSearchTerm('');
+    }
+  }, [item.productId, item.name, item.barcode]);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredProducts = products.filter((p) => {
+    if (!searchTerm.trim()) return true;
+    const q = searchTerm.toLowerCase().trim();
+    if (item.productId && `${p.name} (${p.barcode})`.toLowerCase() === q) return true;
+    return (
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      (p.barcode && String(p.barcode).toLowerCase().includes(q)) ||
+      (p.modelNumber && String(p.modelNumber).toLowerCase().includes(q)) ||
+      (p.brand && p.brand.toLowerCase().includes(q)) ||
+      (p.category && p.category.toLowerCase().includes(q))
+    );
+  });
+
+  const handleSelectProduct = (p) => {
+    onSelect(index, p._id);
+    setSearchTerm(`${p.name}${p.barcode ? ` (${p.barcode})` : ''}`);
+    setIsOpen(false);
+  };
+
+  const handleClear = () => {
+    onClear(index);
+    setSearchTerm('');
+    setIsOpen(false);
+  };
+
+  const handleSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const exact = products.find(
+        (p) => String(p.barcode).trim().toLowerCase() === searchTerm.trim().toLowerCase()
+      );
+      if (exact) {
+        handleSelectProduct(exact);
+        return;
+      }
+      if (filteredProducts.length === 1) {
+        handleSelectProduct(filteredProducts[0]);
+      }
+    } else if (e.key === 'Escape') {
+      setIsOpen(false);
+    }
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div className="relative">
+        <input
+          type="text"
+          value={searchTerm}
+          onFocus={() => setIsOpen(true)}
+          onChange={(e) => {
+            setSearchTerm(e.target.value);
+            setIsOpen(true);
+            if (!e.target.value && item.productId) {
+              handleClear();
+            }
+          }}
+          onKeyDown={handleSearchKeyDown}
+          placeholder="Search product by name or barcode..."
+          className="tactile-input text-xs w-full pl-3 pr-8 font-semibold bg-white"
+          required={!item.productId}
+        />
+        {searchTerm ? (
+          <button
+            type="button"
+            onClick={handleClear}
+            className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
+            title="Clear selection"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        ) : (
+          <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+        )}
+      </div>
+
+      {isOpen && (
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+          {filteredProducts.length === 0 ? (
+            <div className="p-3 text-center text-slate-400 font-semibold text-xs">
+              No products found matching "{searchTerm}"
+            </div>
+          ) : (
+            filteredProducts.map((p) => {
+              const isSelected = item.productId === p._id;
+              return (
+                <div
+                  key={p._id}
+                  onClick={() => handleSelectProduct(p)}
+                  className={`p-2.5 hover:bg-indigo-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2.5 ${
+                    isSelected ? 'bg-indigo-50/90 border-l-4 border-l-indigo-600' : ''
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-extrabold text-slate-900 truncate block text-xs">
+                        {p.name}
+                      </span>
+                      {p.isSerialized && (
+                        <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-indigo-100 text-indigo-700 rounded-full shrink-0">
+                          Serialized
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap">
+                      <span className="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
+                        <Barcode className="w-3 h-3 text-slate-500" />
+                        {p.barcode}
+                      </span>
+                      {p.category && (
+                        <span className="text-slate-500 font-medium">{p.category}</span>
+                      )}
+                      {p.brand && (
+                        <span className="text-slate-400 font-medium">• {p.brand}</span>
+                      )}
+                      {p.modelNumber && (
+                        <span className="font-mono text-slate-500">• {p.modelNumber}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    {Number(p.mrp) > 0 && (
+                      <span className="font-mono font-extrabold text-indigo-600 block text-xs">
+                        ₹{Number(p.mrp).toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    {isSelected && (
+                      <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 justify-end">
+                        <Check className="w-3 h-3" /> Selected
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
   const { currentBranch, selectedBranchId } = useBranch();
@@ -87,13 +268,27 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         name: found.name,
         hsnCode: found.hsnCode || '',
         modelNumber: found.modelNumber || '',
+        purchasePrice: found.purchasePrice || updated[index].purchasePrice || 0,
         mrp: found.mrp || 0,
-        cgstRate: found.cgstRate || 9,
-        sgstRate: found.sgstRate || 9,
+        cgstRate: found.cgstRate ?? 9,
+        sgstRate: found.sgstRate ?? 9,
       };
     } else {
       updated[index].productId = productId;
     }
+    setItems(updated);
+  };
+
+  const handleProductClear = (index) => {
+    const updated = [...items];
+    updated[index] = {
+      ...updated[index],
+      productId: '',
+      barcode: '',
+      name: '',
+      hsnCode: '',
+      modelNumber: '',
+    };
     setItems(updated);
   };
 
@@ -350,7 +545,8 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                   {items.map((item, idx) => (
                     <div
                       key={idx}
-                      className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3"
+                      className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3 relative"
+                      style={{ zIndex: items.length - idx + 10 }}
                     >
                       <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
                         {/* Product Picker */}
@@ -358,19 +554,13 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                           <label className="block text-[11px] font-bold text-slate-600 mb-1">
                             Product #{idx + 1} *
                           </label>
-                          <select
-                            value={item.productId}
-                            onChange={(e) => handleProductSelect(idx, e.target.value)}
-                            className="tactile-input text-xs w-full"
-                            required
-                          >
-                            <option value="">-- Select Catalog Product --</option>
-                            {products.map((p) => (
-                              <option key={p._id} value={p._id}>
-                                {p.name} ({p.barcode})
-                              </option>
-                            ))}
-                          </select>
+                          <ProductSearchSelector
+                            item={item}
+                            index={idx}
+                            products={products}
+                            onSelect={handleProductSelect}
+                            onClear={handleProductClear}
+                          />
                         </div>
 
                         {/* Qty */}
