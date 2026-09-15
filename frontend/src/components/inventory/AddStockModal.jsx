@@ -378,9 +378,8 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                         <div
                           key={p._id}
                           onClick={() => handleSelectProduct(p)}
-                          className={`p-2.5 hover:bg-indigo-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2.5 ${
-                            isSelected ? 'bg-indigo-50/90 border-l-4 border-l-indigo-600' : ''
-                          }`}
+                          className={`p-2.5 hover:bg-indigo-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2.5 ${isSelected ? 'bg-indigo-50/90 border-l-4 border-l-indigo-600' : ''
+                            }`}
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
@@ -561,22 +560,20 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                   <button
                     type="button"
                     onClick={() => setSerialInputMode('bulk')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      serialInputMode === 'bulk'
+                    className={`px-2.5 py-1 rounded-md transition-all ${serialInputMode === 'bulk'
                         ? 'bg-amber-600 text-white shadow-sm'
                         : 'text-amber-800 hover:text-amber-950'
-                    }`}
+                      }`}
                   >
                     Bulk Paste / Scanner
                   </button>
                   <button
                     type="button"
                     onClick={() => setSerialInputMode('individual')}
-                    className={`px-2.5 py-1 rounded-md transition-all ${
-                      serialInputMode === 'individual'
+                    className={`px-2.5 py-1 rounded-md transition-all ${serialInputMode === 'individual'
                         ? 'bg-amber-600 text-white shadow-sm'
                         : 'text-amber-800 hover:text-amber-950'
-                    }`}
+                      }`}
                   >
                     Individual Inputs
                   </button>

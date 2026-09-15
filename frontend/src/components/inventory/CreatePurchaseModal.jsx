@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   X,
   Plus,
@@ -11,27 +11,18 @@ import {
   Barcode,
   Check,
   ChevronDown,
+  RotateCcw,
 } from 'lucide-react';
 import { supplierService } from '../../services/supplierService';
 import { productService } from '../../services/productService';
 import { purchaseService } from '../../services/purchaseService';
 import { useBranch } from '../../context/BranchContext';
 
-// Searchable Product Combobox for Purchase Invoice rows
+// Searchable Product Combobox with Confirmed Fill Card for Purchase Invoice rows
 const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(
-    item.name ? `${item.name}${item.barcode ? ` (${item.barcode})` : ''}` : ''
-  );
+  const [searchTerm, setSearchTerm] = useState('');
   const dropdownRef = useRef(null);
-
-  useEffect(() => {
-    if (item.productId && item.name) {
-      setSearchTerm(`${item.name}${item.barcode ? ` (${item.barcode})` : ''}`);
-    } else if (!item.productId) {
-      setSearchTerm('');
-    }
-  }, [item.productId, item.name, item.barcode]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -43,22 +34,35 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const filteredProducts = products.filter((p) => {
-    if (!searchTerm.trim()) return true;
-    const q = searchTerm.toLowerCase().trim();
-    if (item.productId && `${p.name} (${p.barcode})`.toLowerCase() === q) return true;
-    return (
-      (p.name && p.name.toLowerCase().includes(q)) ||
-      (p.barcode && String(p.barcode).toLowerCase().includes(q)) ||
-      (p.modelNumber && String(p.modelNumber).toLowerCase().includes(q)) ||
-      (p.brand && p.brand.toLowerCase().includes(q)) ||
-      (p.category && p.category.toLowerCase().includes(q))
-    );
-  });
+  // Filter and deduplicate products: if one barcode has multiple entries, show it only one time!
+  const filteredProducts = useMemo(() => {
+    const list = products.filter((p) => {
+      if (!searchTerm.trim()) return true;
+      const q = searchTerm.toLowerCase().trim();
+      return (
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.barcode && String(p.barcode).toLowerCase().includes(q)) ||
+        (p.modelNumber && String(p.modelNumber).toLowerCase().includes(q)) ||
+        (p.brand && p.brand.toLowerCase().includes(q)) ||
+        (p.category && p.category.toLowerCase().includes(q))
+      );
+    });
+
+    const unique = [];
+    const seen = new Set();
+    for (const p of list) {
+      const key = p.barcode ? String(p.barcode).trim().toLowerCase() : String(p._id);
+      if (!seen.has(key)) {
+        seen.add(key);
+        unique.push(p);
+      }
+    }
+    return unique;
+  }, [products, searchTerm]);
 
   const handleSelectProduct = (p) => {
-    onSelect(index, p._id);
-    setSearchTerm(`${p.name}${p.barcode ? ` (${p.barcode})` : ''}`);
+    onSelect(index, p);
+    setSearchTerm('');
     setIsOpen(false);
   };
 
@@ -71,7 +75,7 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
   const handleSearchKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      const exact = products.find(
+      const exact = filteredProducts.find(
         (p) => String(p.barcode).trim().toLowerCase() === searchTerm.trim().toLowerCase()
       );
       if (exact) {
@@ -86,6 +90,54 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
     }
   };
 
+  // Product Fill State: once product is selected, display a rich verified card with a Change button
+  if (item.productId && item.name) {
+    return (
+      <div className="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200/90 flex items-center justify-between gap-3 transition-all hover:bg-indigo-50 shadow-2xs">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-black text-slate-900 text-xs truncate">
+              {item.name}
+            </span>
+            {item.isSerialized && (
+              <span className="px-1.5 py-0.5 text-[9px] font-extrabold bg-indigo-100 text-indigo-700 rounded-full shrink-0">
+                Serialized
+              </span>
+            )}
+            <span className="inline-flex items-center gap-1 font-mono text-[10px] font-bold bg-white text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 shadow-2xs">
+              <Barcode className="w-3.5 h-3.5 text-indigo-600" />
+              {item.barcode || 'N/A'}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-1 flex-wrap font-medium">
+            {item.category && (
+              <span>Category: <strong className="text-slate-700">{item.category}</strong></span>
+            )}
+            {item.brand && (
+              <span>• Brand: <strong className="text-slate-700">{item.brand}</strong></span>
+            )}
+            {item.modelNumber && (
+              <span>• Model: <strong className="text-slate-700 font-mono">{item.modelNumber}</strong></span>
+            )}
+            {item.hsnCode && (
+              <span>• HSN: <strong className="text-slate-700 font-mono">{item.hsnCode}</strong></span>
+            )}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleClear}
+          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-white hover:bg-indigo-100/70 px-2.5 py-1.5 rounded-lg border border-indigo-200 transition-all shrink-0 flex items-center gap-1 cursor-pointer shadow-2xs"
+          title="Change this product"
+        >
+          <RotateCcw className="w-3.5 h-3.5" /> Change
+        </button>
+      </div>
+    );
+  }
+
+  // Unselected State: Search Input with real-time dropdown
   return (
     <div className="relative" ref={dropdownRef}>
       <div className="relative">
@@ -96,21 +148,17 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setIsOpen(true);
-            if (!e.target.value && item.productId) {
-              handleClear();
-            }
           }}
           onKeyDown={handleSearchKeyDown}
           placeholder="Search product by name or barcode..."
-          className="tactile-input text-xs w-full pl-3 pr-8 font-semibold bg-white"
-          required={!item.productId}
+          className="input-tactile text-xs w-full pl-3.5 pr-8 font-semibold bg-white"
         />
         {searchTerm ? (
           <button
             type="button"
-            onClick={handleClear}
+            onClick={() => setSearchTerm('')}
             className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
-            title="Clear selection"
+            title="Clear search"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -122,7 +170,7 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
       {isOpen && (
         <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
           {filteredProducts.length === 0 ? (
-            <div className="p-3 text-center text-slate-400 font-semibold text-xs">
+            <div className="p-3.5 text-center text-slate-400 font-semibold text-xs">
               No products found matching "{searchTerm}"
             </div>
           ) : (
@@ -130,7 +178,7 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
               const isSelected = item.productId === p._id;
               return (
                 <div
-                  key={p._id}
+                  key={p._id || p.barcode}
                   onClick={() => handleSelectProduct(p)}
                   className={`p-2.5 hover:bg-indigo-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2.5 ${
                     isSelected ? 'bg-indigo-50/90 border-l-4 border-l-indigo-600' : ''
@@ -147,16 +195,16 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap">
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500 mt-0.5 flex-wrap font-medium">
                       <span className="font-mono bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1">
                         <Barcode className="w-3 h-3 text-slate-500" />
                         {p.barcode}
                       </span>
                       {p.category && (
-                        <span className="text-slate-500 font-medium">{p.category}</span>
+                        <span className="text-slate-500">{p.category}</span>
                       )}
                       {p.brand && (
-                        <span className="text-slate-400 font-medium">• {p.brand}</span>
+                        <span className="text-slate-400">• {p.brand}</span>
                       )}
                       {p.modelNumber && (
                         <span className="font-mono text-slate-500">• {p.modelNumber}</span>
@@ -202,6 +250,11 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
       productId: '',
       barcode: '',
       name: '',
+      hsnCode: '',
+      modelNumber: '',
+      category: '',
+      brand: '',
+      isSerialized: false,
       quantity: 1,
       purchasePrice: '',
       mrp: 0,
@@ -225,6 +278,11 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
           productId: '',
           barcode: '',
           name: '',
+          hsnCode: '',
+          modelNumber: '',
+          category: '',
+          brand: '',
+          isSerialized: false,
           quantity: 1,
           purchasePrice: '',
           mrp: 0,
@@ -250,8 +308,27 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         setSuppliers(supRes.data || []);
       }
       if (prodRes?.success) {
-        const prodList = (prodRes.data || []).map((p) => (p.productId ? p.productId : p));
-        setProducts(prodList);
+        const rawList = (prodRes.data || []).map((p) => (p.productId ? p.productId : p));
+        // Deduplicate products by barcode: if one barcode has multiple records, show it only one time!
+        const uniqueProducts = [];
+        const seenBarcodes = new Set();
+        const seenIds = new Set();
+
+        for (const p of rawList) {
+          if (!p) continue;
+          const barcode = p.barcode ? String(p.barcode).trim().toLowerCase() : null;
+          const id = p._id ? String(p._id) : null;
+
+          if (barcode) {
+            if (seenBarcodes.has(barcode)) continue;
+            seenBarcodes.add(barcode);
+          } else if (id) {
+            if (seenIds.has(id)) continue;
+            seenIds.add(id);
+          }
+          uniqueProducts.push(p);
+        }
+        setProducts(uniqueProducts);
       }
     } catch (err) {
       console.error('Failed to load purchase modal data:', err);
@@ -271,25 +348,23 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
     });
   };
 
-  const handleProductSelect = (index, productId) => {
-    const found = products.find((p) => p._id === productId);
+  const handleProductSelect = (index, product) => {
     const updated = [...items];
-    if (found) {
-      updated[index] = {
-        ...updated[index],
-        productId: found._id,
-        barcode: found.barcode,
-        name: found.name,
-        hsnCode: found.hsnCode || '',
-        modelNumber: found.modelNumber || '',
-        purchasePrice: updated[index].purchasePrice !== '' ? updated[index].purchasePrice : '',
-        mrp: found.mrp || 0,
-        cgstRate: found.cgstRate ?? 9,
-        sgstRate: found.sgstRate ?? 9,
-      };
-    } else {
-      updated[index].productId = productId;
-    }
+    updated[index] = {
+      ...updated[index],
+      productId: product._id,
+      barcode: product.barcode || '',
+      name: product.name || '',
+      hsnCode: product.hsnCode || '',
+      modelNumber: product.modelNumber || '',
+      category: product.category || '',
+      brand: product.brand || '',
+      isSerialized: product.isSerialized || false,
+      purchasePrice: updated[index].purchasePrice !== '' ? updated[index].purchasePrice : '',
+      mrp: product.mrp || 0,
+      cgstRate: product.cgstRate !== undefined ? product.cgstRate : 9,
+      sgstRate: product.sgstRate !== undefined ? product.sgstRate : 9,
+    };
     setItems(updated);
   };
 
@@ -302,6 +377,9 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
       name: '',
       hsnCode: '',
       modelNumber: '',
+      category: '',
+      brand: '',
+      isSerialized: false,
     };
     setItems(updated);
   };
@@ -321,6 +399,9 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         name: '',
         hsnCode: '',
         modelNumber: '',
+        category: '',
+        brand: '',
+        isSerialized: false,
         quantity: 1,
         purchasePrice: '',
         mrp: 0,
@@ -403,7 +484,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         branchId: selectedBranchId || currentBranch._id,
         supplierId: formData.supplierId,
         supplierName: formData.supplierName,
-        purchaseInvoiceNumber: formData.purchaseInvoiceNumber,
+        purchaseInvoiceNumber: formData.purchaseInvoiceNumber.trim(),
         purchaseDate: formData.purchaseDate,
         paymentStatus: formData.paymentStatus,
         items: items.map((item) => ({
@@ -439,26 +520,30 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
+      <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden border border-slate-100 flex flex-col max-h-[92vh] animate-in zoom-in duration-200">
         {/* Modal Header */}
-        <div className="px-6 py-4 bg-slate-900 text-white flex items-center justify-between">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-2xs">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-lg">New Stock Purchase Invoice</h3>
-              <p className="text-xs text-slate-400">
-                Receive stock into branch:{' '}
-                <span className="text-indigo-300 font-semibold">
+              <div className="flex items-center gap-2">
+                <h3 className="font-black text-lg text-slate-900 tracking-tight">
+                  New Stock Purchase Invoice
+                </h3>
+                <span className="badge badge-indigo text-[10px]">
                   {currentBranch?.name || 'Selected Branch'}
                 </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Record supplier purchase bill, intake inventory stock, and set line-item costs
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -478,29 +563,29 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           ) : (
             <form id="purchase-form" onSubmit={handleSubmit} className="space-y-6">
-              {/* Top Header Fields */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-slate-50 border border-slate-200/60">
+              {/* Top Header Fields: Supplier, Invoice Number, Date, Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 p-4 rounded-2xl bg-slate-50 border border-slate-200/80 shadow-2xs">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                     <Truck className="w-3.5 h-3.5 text-indigo-600" /> Supplier *
                   </label>
                   <select
                     value={formData.supplierId}
                     onChange={handleSupplierChange}
-                    className="tactile-input text-xs w-full"
+                    className="input-tactile text-xs font-semibold"
                     required
                   >
                     <option value="">-- Select Supplier --</option>
                     {suppliers.map((s) => (
                       <option key={s._id} value={s._id}>
-                        {s.name} ({s.brand})
+                        {s.name} {s.brand ? `(${s.brand})` : ''}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                     <Hash className="w-3.5 h-3.5 text-indigo-600" /> Purchase Invoice # *
                   </label>
                   <input
@@ -508,31 +593,31 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                     value={formData.purchaseInvoiceNumber}
                     onChange={(e) => setFormData({ ...formData, purchaseInvoiceNumber: e.target.value })}
                     placeholder="Enter Invoice / Bill #..."
-                    className="tactile-input text-xs w-full font-mono font-semibold"
+                    className="input-tactile text-xs font-mono font-bold"
                     required
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 mb-1 flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-indigo-600" /> Purchase Date
                   </label>
                   <input
                     type="date"
                     value={formData.purchaseDate}
                     onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
-                    className="tactile-input text-xs w-full"
+                    className="input-tactile text-xs font-semibold"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-700 mb-1">
                     Payment Status
                   </label>
                   <select
                     value={formData.paymentStatus}
                     onChange={(e) => setFormData({ ...formData, paymentStatus: e.target.value })}
-                    className="tactile-input text-xs w-full"
+                    className="input-tactile text-xs font-bold"
                   >
                     <option value="PAID">PAID</option>
                     <option value="UNPAID">UNPAID</option>
@@ -544,144 +629,175 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
               {/* Purchase Items List */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                    Line Items ({items.length})
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-black text-slate-900">
+                      Line Items
+                    </h4>
+                    <span className="px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-black border border-indigo-100">
+                      {items.length}
+                    </span>
+                  </div>
                   <button
                     type="button"
                     onClick={addItemRow}
-                    className="tactile-btn text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border-indigo-200"
+                    className="tactile-btn text-xs bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200 font-bold flex items-center gap-1.5 px-3 py-1.5 rounded-xl cursor-pointer transition-all shadow-2xs"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Product Item
                   </button>
                 </div>
 
                 <div className="space-y-3">
-                  {items.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="p-4 rounded-xl border border-slate-200 bg-white shadow-sm space-y-3 relative"
-                      style={{ zIndex: items.length - idx + 10 }}
-                    >
-                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                        {/* Product Picker */}
-                        <div className="md:col-span-5">
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                            Product #{idx + 1} *
-                          </label>
-                          <ProductSearchSelector
-                            item={item}
-                            index={idx}
-                            products={products}
-                            onSelect={handleProductSelect}
-                            onClear={handleProductClear}
-                          />
+                  {items.map((item, idx) => {
+                    const itemQty = Number(item.quantity) || 0;
+                    const itemCost = Number(item.purchasePrice) || 0;
+                    const itemBase = itemQty * itemCost;
+                    const itemTaxRate = (Number(item.cgstRate) || 0) + (Number(item.sgstRate) || 0);
+                    const itemLineTotal = itemBase * (1 + itemTaxRate / 100);
+
+                    return (
+                      <div
+                        key={idx}
+                        className="p-4 rounded-2xl border border-slate-200/90 bg-white shadow-xs hover:shadow-sm transition-all space-y-3 relative"
+                        style={{ zIndex: items.length - idx + 10 }}
+                      >
+                        {/* Item Row Header */}
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 rounded-full bg-slate-900 text-white text-[10px] font-black flex items-center justify-center">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs font-extrabold text-slate-800">
+                              Item #{idx + 1}
+                            </span>
+                            {item.productId && (
+                              <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-0.5">
+                                <Check className="w-3 h-3" /> Ready
+                              </span>
+                            )}
+                          </div>
+
+                          {items.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeItemRow(idx)}
+                              className="text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 cursor-pointer font-semibold"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" /> Remove
+                            </button>
+                          )}
                         </div>
 
-                        {/* Qty */}
-                        <div className="md:col-span-3">
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                            Stock Qty *
-                          </label>
-                          <input
-                            type="number"
-                            min="1"
-                            value={item.quantity}
-                            onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                            className="tactile-input text-xs w-full font-mono text-center font-bold"
-                            required
-                          />
+                        {/* Main Grid: Product Picker, Qty, Unit Cost */}
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+                          {/* Product Picker & Filled State */}
+                          <div className="md:col-span-6">
+                            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                              Catalog Product *
+                            </label>
+                            <ProductSearchSelector
+                              item={item}
+                              index={idx}
+                              products={products}
+                              onSelect={handleProductSelect}
+                              onClear={handleProductClear}
+                            />
+                          </div>
+
+                          {/* Qty */}
+                          <div className="md:col-span-3">
+                            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                              Stock Qty *
+                            </label>
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                              className="input-tactile text-xs font-mono text-center font-bold"
+                              placeholder="1"
+                              required
+                            />
+                          </div>
+
+                          {/* Buy Price */}
+                          <div className="md:col-span-3">
+                            <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
+                              Unit Cost (₹) *
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">₹</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={item.purchasePrice}
+                                onChange={(e) => handleItemChange(idx, 'purchasePrice', e.target.value)}
+                                placeholder="0.00"
+                                className="input-tactile text-xs font-mono font-bold pl-7 pr-3"
+                                required
+                              />
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Buy Price */}
-                        <div className="md:col-span-3">
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                            Unit Cost (₹) *
-                          </label>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            value={item.purchasePrice}
-                            onChange={(e) => handleItemChange(idx, 'purchasePrice', e.target.value)}
-                            placeholder="0.00"
-                            className="tactile-input text-xs w-full font-mono font-semibold"
-                            required
-                          />
-                        </div>
+                        {/* Secondary Fields (Taxes & Line Total) */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2.5 border-t border-slate-100 bg-slate-50/60 p-2.5 rounded-xl text-xs">
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                              CGST (%)
+                            </label>
+                            <input
+                              type="number"
+                              value={item.cgstRate}
+                              onChange={(e) => handleItemChange(idx, 'cgstRate', e.target.value)}
+                              className="input-tactile text-[11px] py-1 px-2.5 font-mono"
+                              placeholder="9"
+                            />
+                          </div>
 
-                        {/* Remove */}
-                        <div className="md:col-span-1 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => removeItemRow(idx)}
-                            disabled={items.length === 1}
-                            className="p-2 rounded-lg text-rose-500 hover:bg-rose-50 disabled:opacity-30"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
+                          <div>
+                            <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                              SGST (%)
+                            </label>
+                            <input
+                              type="number"
+                              value={item.sgstRate}
+                              onChange={(e) => handleItemChange(idx, 'sgstRate', e.target.value)}
+                              className="input-tactile text-[11px] py-1 px-2.5 font-mono"
+                              placeholder="9"
+                            />
+                          </div>
 
-                      {/* Secondary Fields (Taxes & Line Total) */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 border-t border-slate-100 text-xs">
-                        <div>
-                          <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
-                            CGST %
-                          </label>
-                          <input
-                            type="number"
-                            value={item.cgstRate}
-                            onChange={(e) => handleItemChange(idx, 'cgstRate', e.target.value)}
-                            className="tactile-input text-[11px] py-1 px-2 w-full font-mono"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
-                            SGST %
-                          </label>
-                          <input
-                            type="number"
-                            value={item.sgstRate}
-                            onChange={(e) => handleItemChange(idx, 'sgstRate', e.target.value)}
-                            className="tactile-input text-[11px] py-1 px-2 w-full font-mono"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-[10px] text-slate-500 font-semibold mb-0.5">
-                            Line Total (Inc Tax)
-                          </label>
-                          <div className="font-mono font-bold text-slate-900 py-1 text-right">
-                            ₹
-                            {(
-                              (Number(item.quantity) || 0) * (Number(item.purchasePrice) || 0) *
-                              (1 + ((Number(item.cgstRate) || 0) + (Number(item.sgstRate) || 0)) / 100)
-                            ).toFixed(2)}
+                          <div className="flex flex-col justify-end text-right">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                              Line Total (Inc. Tax)
+                            </span>
+                            <span className="text-sm font-black font-mono text-indigo-700 bg-white py-1 px-3 rounded-lg border border-indigo-100 shadow-2xs inline-block">
+                              ₹{itemLineTotal.toFixed(2)}
+                            </span>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Summary Box */}
-              <div className="p-4 rounded-xl bg-indigo-50/50 border border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2 text-indigo-900 text-xs font-bold">
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-slate-50 to-indigo-50/50 border border-indigo-100 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-indigo-950 text-xs font-extrabold">
                   <Calculator className="w-4 h-4 text-indigo-600" /> Real-time Purchase Summary
                 </div>
                 <div className="flex items-center gap-6 text-xs font-mono">
                   <div>
-                    <span className="text-slate-500">Subtotal:</span>{' '}
+                    <span className="text-slate-500 font-sans font-medium">Subtotal:</span>{' '}
                     <span className="font-bold text-slate-800">₹{summary.subtotal.toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500">Tax Total:</span>{' '}
+                    <span className="text-slate-500 font-sans font-medium">Tax Total:</span>{' '}
                     <span className="font-bold text-slate-800">₹{summary.taxTotal.toFixed(2)}</span>
                   </div>
-                  <div className="text-base font-extrabold text-indigo-600 bg-white px-3 py-1 rounded-lg border border-indigo-200">
+                  <div className="text-base font-black text-indigo-600 bg-white px-3.5 py-1.5 rounded-xl border border-indigo-200 shadow-xs">
                     Grand Total: ₹{summary.grandTotal.toFixed(2)}
                   </div>
                 </div>
@@ -691,22 +807,27 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="tactile-btn bg-white text-slate-700 hover:bg-slate-100"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="purchase-form"
-            disabled={submitting}
-            className="tactile-btn bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {submitting ? 'Processing Purchase Order...' : 'Submit & Receive Stock'}
-          </button>
+        <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between shrink-0">
+          <div className="text-xs text-slate-500 font-medium">
+            <strong className="text-slate-800">{items.length}</strong> item{items.length > 1 ? 's' : ''} in this invoice
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-secondary text-xs px-4 py-2"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              form="purchase-form"
+              disabled={submitting}
+              className="btn-primary text-xs px-5 py-2 disabled:opacity-50"
+            >
+              {submitting ? 'Processing Purchase Order...' : 'Submit & Receive Stock'}
+            </button>
+          </div>
         </div>
       </div>
     </div>
