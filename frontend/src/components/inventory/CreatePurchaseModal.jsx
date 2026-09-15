@@ -724,19 +724,16 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                             <label className="block text-[11px] font-extrabold uppercase tracking-wider text-slate-600 mb-1">
                               Unit Cost (₹) *
                             </label>
-                            <div className="relative">
-                              <span className="absolute left-3 top-2.5 text-xs font-bold text-slate-400">₹</span>
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={item.purchasePrice}
-                                onChange={(e) => handleItemChange(idx, 'purchasePrice', e.target.value)}
-                                placeholder="0.00"
-                                className="input-tactile text-xs font-mono font-bold pl-7 pr-3"
-                                required
-                              />
-                            </div>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              value={item.purchasePrice}
+                              onChange={(e) => handleItemChange(idx, 'purchasePrice', e.target.value)}
+                              placeholder="0.00"
+                              className="input-tactile text-xs font-mono font-bold px-3"
+                              required
+                            />
                           </div>
                         </div>
 
