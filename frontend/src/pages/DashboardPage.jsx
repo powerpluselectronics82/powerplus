@@ -244,7 +244,7 @@ export const DashboardPage = () => {
 
           <div className="flex flex-wrap gap-2">
             <Link
-              to="/sales/new"
+              to="/pos"
               className="tactile-btn py-2 px-4 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5"
             >
               <PlusCircle className="w-4 h-4" /> New POS Billing
