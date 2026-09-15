@@ -9,7 +9,6 @@ import { MonthlyInventoryReportModal } from '../components/inventory/MonthlyInve
 import {
   Package,
   Plus,
-  Search,
   Tag,
   RefreshCw,
   DollarSign,
@@ -523,9 +522,8 @@ export const ProductsPage = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search catalog, barcode, category..."
-            className="input-tactile text-xs pl-9"
+            className="input-tactile text-xs px-3.5"
           />
-          
         </div>
       </div>
 
