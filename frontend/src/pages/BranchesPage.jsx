@@ -264,10 +264,10 @@ export const BranchesPage = () => {
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
 
-          {role === 'OWNER' && (
+          {(!role || role.toUpperCase() === 'OWNER' || role.toUpperCase() === 'BRANCH_MANAGER' || role.toUpperCase() === 'ADMIN') && (
             <button
               onClick={() => setIsAddModalOpen(true)}
-              className="tactile-btn py-2.5 px-4 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5"
+              className="tactile-btn py-2.5 px-4 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               Create New Branch
@@ -302,9 +302,9 @@ export const BranchesPage = () => {
 
         <div className="tactile-card p-4 bg-white border border-slate-200/80 flex items-center justify-between">
           <div>
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Managers Assigned</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Assigned Managers</p>
             <h3 className="text-2xl font-extrabold text-amber-600 mt-1">
-              {branches.filter((b) => Boolean(b.managerName || b.managerId)).length}
+              {branches.filter((b) => b.managerId).length}
             </h3>
           </div>
           <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
@@ -332,8 +332,15 @@ export const BranchesPage = () => {
           Loading company branches...
         </div>
       ) : !Array.isArray(branches) || branches.length === 0 ? (
-        <div className="p-12 text-center text-slate-400 font-semibold text-sm bg-white rounded-2xl border border-slate-200/80">
-          No branches found. Click "Create New Branch" to add your first branch location.
+        <div className="p-12 text-center text-slate-500 font-semibold text-sm bg-white rounded-2xl border border-slate-200/80 space-y-3">
+          <p>No branches found. Click "Create New Branch" to add your first branch location.</p>
+          <button
+            onClick={() => setIsAddModalOpen(true)}
+            className="tactile-btn py-2 px-4 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md inline-flex items-center gap-1.5 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            Create New Branch
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

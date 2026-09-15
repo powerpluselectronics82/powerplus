@@ -86,8 +86,8 @@ const addBranch = async (req, res) => {
               type: allowedPhoneTypes.includes(rawType)
                 ? rawType
                 : i === 0
-                ? "PRIMARY"
-                : "SECONDARY",
+                  ? "PRIMARY"
+                  : "SECONDARY",
             };
           })
           .filter((item) => Boolean(item.number));
@@ -126,8 +126,8 @@ const addBranch = async (req, res) => {
               type: allowedEmailTypes.includes(rawType)
                 ? rawType
                 : i === 0
-                ? "PRIMARY"
-                : "SECONDARY",
+                  ? "PRIMARY"
+                  : "SECONDARY",
             };
           })
           .filter((item) => Boolean(item.address));
