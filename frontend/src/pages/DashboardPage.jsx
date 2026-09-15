@@ -4,7 +4,7 @@ import { useBranch } from '../context/BranchContext';
 import { productService } from '../services/productService';
 import { saleService } from '../services/saleService';
 import { TaxInvoiceModal } from '../components/pos/TaxInvoiceModal';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import {
   TrendingUp,
   AlertTriangle,
@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 
 export const DashboardPage = () => {
+  const navigate = useNavigate();
   const { role, user } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
 
@@ -243,12 +244,16 @@ export const DashboardPage = () => {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link
-              to="/pos"
-              className="tactile-btn py-2 px-4 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5"
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                navigate('/pos');
+              }}
+              className="tactile-btn py-2 px-4 text-xs font-extrabold bg-indigo-600 hover:bg-indigo-500 text-white shadow-md flex items-center gap-1.5 cursor-pointer"
             >
               <PlusCircle className="w-4 h-4" /> New POS Billing
-            </Link>
+            </button>
           </div>
         </div>
       </div>
