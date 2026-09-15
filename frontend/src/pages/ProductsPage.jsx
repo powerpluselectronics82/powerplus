@@ -525,6 +525,7 @@ export const ProductsPage = () => {
             placeholder="Search catalog, barcode, category..."
             className="input-tactile text-xs pl-9"
           />
+          
         </div>
       </div>
 
