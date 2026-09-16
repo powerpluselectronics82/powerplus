@@ -65,11 +65,11 @@ const BranchInventorySchema = new mongoose.Schema(
       required: true, 
       min: 0
     },
-    Totalproductbuy: {
-      type: Number,
-      required: true,
-      min: 0
-    },
+    // Totalproductbuy: {
+    //   type: Number,
+    //   required: true,
+    //   min: 0
+    // },
   },
   {
     timestamps: true,

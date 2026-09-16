@@ -3,6 +3,7 @@ const Branch = require("../model/branch");
 const Product = require("../model/product");
 const BranchInventory = require("../model/BranchInventory");
 const InventoryUnit = require("../model/inventryUnit");
+const InventoryTransaction = require("../model/InventoryTransaction");
 const redis = require("../config/redis");
 const { createAuditLog } = require("../utils/auditLogger");
 
@@ -426,9 +427,18 @@ const addBranchInventory = async (req, res) => {
 				expiryDate,
 				barcode: product.barcode,
 				stock: requestedQuantity,
-				Totalproductbuy: requestedQuantity,
 			});
 		}
+
+		const inventoryTransaction = await InventoryTransaction.create({
+			companyId,
+			branchId,
+			productId,
+			quantity: requestedQuantity,
+			mrp: inventoryMrp,
+			purchasePrice,
+			barcode: product.barcode,
+		});
 
 		let units = [];
 		if (isSerialized) {
@@ -457,7 +467,7 @@ const addBranchInventory = async (req, res) => {
 
 		await invalidateBranchInventoryCache(companyId, branchId);
 
-		const result = { inventory, units };
+		const result = { inventory, inventoryTransaction, units };
 
 		return res.status(201).json({
 			success: true,
