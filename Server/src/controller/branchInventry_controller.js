@@ -426,6 +426,7 @@ const addBranchInventory = async (req, res) => {
 				expiryDate,
 				barcode: product.barcode,
 				stock: requestedQuantity,
+				Totalproductbuy: requestedQuantity,
 			});
 		}
 
