@@ -440,6 +440,8 @@ const addBranchInventory = async (req, res) => {
 			discountType,
 			discountValue,
 			barcode: product.barcode,
+			sellingPrice,
+			serialNumbers: isSerialized ? serials : [],
 		});
 
 		let units = [];
@@ -451,6 +453,7 @@ const addBranchInventory = async (req, res) => {
 				serialNumber,
 				barcode: product.barcode,
 				mrp: inventoryMrp,
+				purchasePrice,
 				discountType: discountType || "fixed",
 				discountValue: discountVal,
 				sellingPrice,
@@ -495,23 +498,26 @@ const getMonthlyInventoryReport = async (req, res) => {
 			return res.status(400).json({ success: false, message: "month must use YYYY-MM format" });
 		}
 
-		const start = new Date(`${month}-01T00:00:00.000Z`);
-		const end = new Date(start);
-		end.setUTCMonth(end.getUTCMonth() + 1);
+		// Buffer of 1 day on each side to safely account for timezone offsets (e.g. IST UTC+5:30)
+		const [yearStr, monthStr] = month.split("-");
+		const year = parseInt(yearStr, 10);
+		const monthNum = parseInt(monthStr, 10);
 
-		// 1. Fetch all InventoryUnits created in this month
-		const unitsQuery = { createdAt: { $gte: start, $lt: end } };
-		if (companyId) unitsQuery.companyId = companyId;
-		if (branchId && mongoose.isValidObjectId(branchId)) unitsQuery.branchId = branchId;
+		const queryStart = new Date(Date.UTC(year, monthNum - 1, 1, 0, 0, 0, 0) - 24 * 60 * 60 * 1000);
+		const queryEnd = new Date(Date.UTC(year, monthNum, 1, 0, 0, 0, 0) + 24 * 60 * 60 * 1000);
 
-		const monthUnits = await InventoryUnit.find(unitsQuery)
-			.populate("productId")
-			.populate("branchId", "name code")
-			.sort({ createdAt: -1 })
-			.lean();
+		const isDateInSelectedMonth = (d) => {
+			if (!d) return false;
+			const dt = new Date(d);
+			const utcMonth = dt.toISOString().slice(0, 7);
+			// IST offset (+5:30)
+			const istDate = new Date(dt.getTime() + 5.5 * 60 * 60 * 1000);
+			const istMonth = istDate.toISOString().slice(0, 7);
+			return utcMonth === month || istMonth === month;
+		};
 
-		// 2. Fetch inventory transactions for purchasePrice lookup & non-serialized items
-		const transactionQuery = { createdAt: { $gte: start, $lt: end } };
+		// 1. Fetch InventoryTransactions
+		const transactionQuery = { createdAt: { $gte: queryStart, $lt: queryEnd } };
 		if (companyId) transactionQuery.companyId = companyId;
 		if (branchId && mongoose.isValidObjectId(branchId)) transactionQuery.branchId = branchId;
 
@@ -521,149 +527,245 @@ const getMonthlyInventoryReport = async (req, res) => {
 			.sort({ createdAt: -1 })
 			.lean();
 
-		const getPurchasePriceForUnit = (prodId, branchIdVal, mrpVal) => {
-			const found = inventoryTransactions.find(
-				(inv) =>
-					String(inv.productId?._id || inv.productId) === String(prodId) &&
-					(!branchIdVal || String(inv.branchId?._id || inv.branchId) === String(branchIdVal)) &&
-					(mrpVal === undefined || mrpVal === null || Number(inv.mrp) === Number(mrpVal))
+		const validTransactions = inventoryTransactions.filter((t) => isDateInSelectedMonth(t.createdAt));
+
+		// 2. Fetch InventoryUnits created in this period
+		const unitsQuery = { createdAt: { $gte: queryStart, $lt: queryEnd } };
+		if (companyId) unitsQuery.companyId = companyId;
+		if (branchId && mongoose.isValidObjectId(branchId)) unitsQuery.branchId = branchId;
+
+		const monthUnits = await InventoryUnit.find(unitsQuery)
+			.populate("productId")
+			.populate("branchId", "name code")
+			.sort({ createdAt: -1 })
+			.lean();
+
+		const validUnits = monthUnits.filter((u) => isDateInSelectedMonth(u.createdAt));
+
+		// Index units by product + branch for linking
+		const unitsByProductBranch = new Map();
+		for (const u of validUnits) {
+			const pId = String(u.productId?._id || u.productId || "");
+			const bId = String(u.branchId?._id || u.branchId || "");
+			const key = `${pId}_${bId}`;
+			if (!unitsByProductBranch.has(key)) {
+				unitsByProductBranch.set(key, []);
+			}
+			unitsByProductBranch.get(key).push(u);
+		}
+
+		const items = [];
+		const usedUnitIds = new Set();
+
+		// Each inventory transaction is a distinct intake batch!
+		for (const tx of validTransactions) {
+			if (!tx.productId || !tx.productId._id) continue;
+
+			const prod = tx.productId;
+			const branchObj = tx.branchId || {};
+			const mrp = Number(tx.mrp !== undefined && tx.mrp !== null ? tx.mrp : prod.mrp || 0);
+			const discountVal = Number(tx.discountValue || 0);
+			const discountAmount = tx.discountType === "percentage" ? (mrp * discountVal) / 100 : discountVal;
+			const sellingPrice = Number(
+				tx.sellingPrice !== undefined && tx.sellingPrice !== null
+					? tx.sellingPrice
+					: Math.max(0, mrp - discountAmount)
 			);
-			return found ? Number(found.purchasePrice || 0) : 0;
-		};
+			const purchasePrice = Number(tx.purchasePrice || 0);
+			const quantity = Number(tx.quantity || 0);
+			const isSerialized = Boolean(prod.isSerialized);
 
-		const reportMap = new Map();
+			let serialNumbers = [];
 
-		// Group InventoryUnits created in this month DATE-WISE
-		for (const unit of monthUnits) {
-			if (!unit.productId || !unit.productId._id) continue;
+			if (Array.isArray(tx.serialNumbers) && tx.serialNumbers.length > 0) {
+				serialNumbers = tx.serialNumbers.map((s) => ({
+					serialNumber: s,
+					addedAt: tx.createdAt,
+					status: "available",
+				}));
+			} else if (isSerialized) {
+				const pbKey = `${String(prod._id)}_${String(branchObj._id || "")}`;
+				const candidateUnits = unitsByProductBranch.get(pbKey) || [];
+				const txTime = new Date(tx.createdAt).getTime();
 
-			const prod = unit.productId;
-			const branchObj = unit.branchId || {};
-			const dateStr = new Date(unit.createdAt).toISOString().slice(0, 10); // YYYY-MM-DD
-			const key = `SERIAL_${prod._id}_${branchObj._id || "default"}_${unit.mrp || 0}_${dateStr}`;
-
-			if (!reportMap.has(key)) {
-				const mrp = Number(unit.mrp || prod.mrp || 0);
-				const discountVal = Number(unit.discountValue || 0);
-				const discountAmount = unit.discountType === "percentage" ? (mrp * discountVal) / 100 : discountVal;
-				const sellingPrice = Number(unit.sellingPrice || Math.max(0, mrp - discountAmount));
-				const purchasePrice = getPurchasePriceForUnit(prod._id, branchObj._id, unit.mrp);
-
-				reportMap.set(key, {
-					inventoryId: unit._id,
-					createdAt: unit.createdAt,
-					updatedAt: unit.createdAt,
-					branchId: branchObj._id,
-					branchName: branchObj.name || "Main Branch",
-					branchCode: branchObj.code || "BR01",
-					productId: prod._id,
-					name: prod.name,
-					barcode: unit.barcode || prod.barcode,
-					category: prod.category || "General",
-					brand: prod.brand || "",
-					modelNumber: prod.modelNumber || "",
-					hsnCode: prod.hsnCode || "",
-					isSerialized: true,
-					mrp,
-					discountType: unit.discountType || "fixed",
-					discountValue: discountVal,
-					purchasePrice,
-					sellingPrice,
-					serialUnitsMap: new Map(),
+				// Try to match units created around the transaction time (+/- 15 mins)
+				const matched = candidateUnits.filter((u) => {
+					if (usedUnitIds.has(String(u._id))) return false;
+					const uTime = new Date(u.createdAt).getTime();
+					return Math.abs(uTime - txTime) <= 15 * 60 * 1000;
 				});
+
+				const unitsToUse = matched.length > 0
+					? matched
+					: candidateUnits.filter((u) => !usedUnitIds.has(String(u._id))).slice(0, quantity);
+
+				for (const u of unitsToUse) {
+					usedUnitIds.add(String(u._id));
+					serialNumbers.push({
+						unitId: u._id,
+						serialNumber: u.serialNumber,
+						addedAt: u.createdAt,
+						status: u.status,
+					});
+				}
 			}
 
-			const record = reportMap.get(key);
-			if (!record.serialUnitsMap.has(unit._id.toString())) {
-				record.serialUnitsMap.set(unit._id.toString(), {
-					unitId: unit._id,
-					serialNumber: unit.serialNumber,
-					addedAt: unit.createdAt,
-					status: unit.status,
-				});
-			}
+			const stockAdded = isSerialized && serialNumbers.length > 0
+				? Math.max(quantity, serialNumbers.length)
+				: quantity;
+
+			items.push({
+				inventoryId: tx._id,
+				transactionId: tx._id,
+				createdAt: tx.createdAt,
+				updatedAt: tx.updatedAt || tx.createdAt,
+				branchId: branchObj._id,
+				branchName: branchObj.name || "Main Branch",
+				branchCode: branchObj.code || "BR01",
+				productId: prod._id,
+				name: prod.name,
+				barcode: tx.barcode || prod.barcode,
+				category: prod.category || "General",
+				brand: prod.brand || "",
+				modelNumber: prod.modelNumber || "",
+				hsnCode: prod.hsnCode || "",
+				isSerialized,
+				mrp,
+				discountType: tx.discountType || "fixed",
+				discountValue: discountVal,
+				purchasePrice,
+				sellingPrice,
+				stockAdded,
+				totalPurchaseValue: purchasePrice * stockAdded,
+				totalSellingValue: sellingPrice * stockAdded,
+				serialNumbers,
+			});
 		}
 
-		// Process non-serialized inventory transactions created in this month DATE-WISE
-		for (const item of inventoryTransactions) {
-			if (!item.productId || !item.productId._id || item.productId.isSerialized) continue;
+		// 3. Check for any orphaned InventoryUnits not attached to a transaction
+		const orphanedUnits = validUnits.filter((u) => !usedUnitIds.has(String(u._id)));
+		if (orphanedUnits.length > 0) {
+			const orphanedMap = new Map();
+			for (const u of orphanedUnits) {
+				if (!u.productId || !u.productId._id) continue;
+				const prod = u.productId;
+				const branchObj = u.branchId || {};
+				const dateStr = new Date(u.createdAt).toISOString().slice(0, 10);
+				const key = `ORPHAN_${prod._id}_${branchObj._id || "default"}_${u.mrp || 0}_${dateStr}`;
 
-			const itemDate = new Date(item.createdAt);
+				if (!orphanedMap.has(key)) {
+					const mrp = Number(u.mrp || prod.mrp || 0);
+					const discountVal = Number(u.discountValue || 0);
+					const discountAmount = u.discountType === "percentage" ? (mrp * discountVal) / 100 : discountVal;
+					const sellingPrice = Number(u.sellingPrice || Math.max(0, mrp - discountAmount));
+					const purchasePrice = Number(u.purchasePrice || prod.purchasePrice || 0);
 
-			const prod = item.productId;
-			const branchObj = item.branchId || {};
-			const dateStr = itemDate.toISOString().slice(0, 10); // YYYY-MM-DD
-			const key = `NONSERIAL_${prod._id}_${branchObj._id || "default"}_${item.mrp || 0}_${dateStr}`;
+					orphanedMap.set(key, {
+						inventoryId: u._id,
+						transactionId: u._id,
+						createdAt: u.createdAt,
+						updatedAt: u.createdAt,
+						branchId: branchObj._id,
+						branchName: branchObj.name || "Main Branch",
+						branchCode: branchObj.code || "BR01",
+						productId: prod._id,
+						name: prod.name,
+						barcode: u.barcode || prod.barcode,
+						category: prod.category || "General",
+						brand: prod.brand || "",
+						modelNumber: prod.modelNumber || "",
+						hsnCode: prod.hsnCode || "",
+						isSerialized: true,
+						mrp,
+						discountType: u.discountType || "fixed",
+						discountValue: discountVal,
+						purchasePrice,
+						sellingPrice,
+						stockAdded: 0,
+						totalPurchaseValue: 0,
+						totalSellingValue: 0,
+						serialNumbers: [],
+					});
+				}
 
-			if (!reportMap.has(key)) {
-				const stock = Number(item.quantity || 0);
-				const purchasePrice = Number(item.purchasePrice || 0);
-				const mrp = Number(item.mrp || 0);
-				const discountVal = Number(item.discountValue || 0);
-				const discountAmount = item.discountType === "percentage" ? (mrp * discountVal) / 100 : discountVal;
-				const sellingPrice = Math.max(0, mrp - discountAmount);
-
-				reportMap.set(key, {
-					inventoryId: item._id,
-					createdAt: item.createdAt,
-					updatedAt: item.updatedAt,
-					branchId: branchObj._id,
-					branchName: branchObj.name || "Main Branch",
-					branchCode: branchObj.code || "BR01",
-					productId: prod._id,
-					name: prod.name,
-					barcode: item.barcode || prod.barcode,
-					category: prod.category || "General",
-					brand: prod.brand || "",
-					modelNumber: prod.modelNumber || "",
-					hsnCode: prod.hsnCode || "",
-					isSerialized: false,
-					mrp,
-					discountType: item.discountType || "fixed",
-					discountValue: discountVal,
-					purchasePrice,
-					sellingPrice,
-					stockAdded: stock,
-					totalPurchaseValue: purchasePrice * stock,
-					totalSellingValue: sellingPrice * stock,
-					serialNumbers: [],
+				const rec = orphanedMap.get(key);
+				rec.stockAdded += 1;
+				rec.totalPurchaseValue = rec.purchasePrice * rec.stockAdded;
+				rec.totalSellingValue = rec.sellingPrice * rec.stockAdded;
+				rec.serialNumbers.push({
+					unitId: u._id,
+					serialNumber: u.serialNumber,
+					addedAt: u.createdAt,
+					status: u.status,
 				});
 			}
+
+			items.push(...orphanedMap.values());
 		}
 
-		// Format output items
-		const items = Array.from(reportMap.values()).map((rec) => {
-			if (rec.isSerialized) {
-				const serialNumbers = Array.from(rec.serialUnitsMap.values());
-				const stockAdded = serialNumbers.length;
-				return {
-					inventoryId: rec.inventoryId,
-					createdAt: rec.createdAt,
-					updatedAt: rec.updatedAt,
-					branchId: rec.branchId,
-					branchName: rec.branchName,
-					branchCode: rec.branchCode,
-					productId: rec.productId,
-					name: rec.name,
-					barcode: rec.barcode,
-					category: rec.category,
-					brand: rec.brand,
-					modelNumber: rec.modelNumber,
-					hsnCode: rec.hsnCode,
-					isSerialized: true,
-					mrp: rec.mrp,
-					discountType: rec.discountType,
-					discountValue: rec.discountValue,
-					purchasePrice: rec.purchasePrice,
-					sellingPrice: rec.sellingPrice,
-					stockAdded,
-					totalPurchaseValue: rec.purchasePrice * stockAdded,
-					totalSellingValue: rec.sellingPrice * stockAdded,
-					serialNumbers,
-				};
-			}
-			return rec;
-		}).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+		// 4. Check for any BranchInventory records created in this month without a transaction or unit
+		const branchInvQuery = { createdAt: { $gte: queryStart, $lt: queryEnd } };
+		if (companyId) branchInvQuery.companyId = companyId;
+		if (branchId && mongoose.isValidObjectId(branchId)) branchInvQuery.branchId = branchId;
+
+		const createdBranchInventories = await BranchInventory.find(branchInvQuery)
+			.populate("productId")
+			.populate("branchId", "name code")
+			.lean();
+
+		for (const bi of createdBranchInventories) {
+			if (!bi.productId || !bi.productId._id) continue;
+			if (!isDateInSelectedMonth(bi.createdAt)) continue;
+
+			// Check if already represented by an InventoryTransaction
+			const alreadyHasTx = validTransactions.some(
+				(tx) =>
+					String(tx.productId?._id || tx.productId) === String(bi.productId._id) &&
+					String(tx.branchId?._id || tx.branchId) === String(bi.branchId?._id || bi.branchId)
+			);
+			if (alreadyHasTx) continue;
+
+			const prod = bi.productId;
+			const branchObj = bi.branchId || {};
+			const mrp = Number(bi.mrp || prod.mrp || 0);
+			const discountVal = Number(bi.discountValue || 0);
+			const discountAmount = bi.discountType === "percentage" ? (mrp * discountVal) / 100 : discountVal;
+			const sellingPrice = Math.max(0, mrp - discountAmount);
+			const purchasePrice = Number(bi.purchasePrice || 0);
+			const stockAdded = Number(bi.stock || 0);
+
+			if (stockAdded <= 0) continue;
+
+			items.push({
+				inventoryId: bi._id,
+				transactionId: bi._id,
+				createdAt: bi.createdAt,
+				updatedAt: bi.updatedAt || bi.createdAt,
+				branchId: branchObj._id,
+				branchName: branchObj.name || "Main Branch",
+				branchCode: branchObj.code || "BR01",
+				productId: prod._id,
+				name: prod.name,
+				barcode: bi.barcode || prod.barcode,
+				category: prod.category || "General",
+				brand: prod.brand || "",
+				modelNumber: prod.modelNumber || "",
+				hsnCode: prod.hsnCode || "",
+				isSerialized: Boolean(prod.isSerialized),
+				mrp,
+				discountType: bi.discountType || "fixed",
+				discountValue: discountVal,
+				purchasePrice,
+				sellingPrice,
+				stockAdded,
+				totalPurchaseValue: purchasePrice * stockAdded,
+				totalSellingValue: sellingPrice * stockAdded,
+				serialNumbers: [],
+			});
+		}
+
+		// Sort newest first
+		items.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
 		const totalBatches = items.length;
 		const totalUnitsAdded = items.reduce((sum, i) => sum + i.stockAdded, 0);

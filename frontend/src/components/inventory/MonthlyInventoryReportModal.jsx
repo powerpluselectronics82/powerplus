@@ -72,9 +72,10 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
       String(item.modelNumber || '').toLowerCase().includes(q) ||
       String(item.hsnCode || '').toLowerCase().includes(q);
 
-    const matchesSerial = (item.serialNumbers || []).some((s) =>
-      String(s.serialNumber || '').toLowerCase().includes(q)
-    );
+    const matchesSerial = (item.serialNumbers || []).some((s) => {
+      const sn = typeof s === 'object' ? s?.serialNumber : s;
+      return String(sn || '').toLowerCase().includes(q);
+    });
 
     return matchesGeneral || matchesSerial;
   });
@@ -195,12 +196,16 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                       <div class="serials-box">
                         <div class="serials-title">Added Serial Numbers (${item.serialNumbers.length}):</div>
                         <div>
-                          ${item.serialNumbers.map(s => `
-                            <span class="serial-tag">
-                              ${s.serialNumber}
-                              <span class="serial-date">(${new Date(s.addedAt).toLocaleDateString('en-IN')})</span>
-                            </span>
-                          `).join('')}
+                          ${item.serialNumbers.map(s => {
+                            const sn = typeof s === 'object' ? s.serialNumber : s;
+                            const dt = s?.addedAt ? new Date(s.addedAt).toLocaleDateString('en-IN') : '';
+                            return `
+                              <span class="serial-tag">
+                                ${sn}
+                                ${dt ? `<span class="serial-date">(${dt})</span>` : ''}
+                              </span>
+                            `;
+                          }).join('')}
                         </div>
                       </div>
                     ` : ''}
@@ -476,19 +481,24 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                                 </span>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                {item.serialNumbers.map((s, idx) => (
-                                  <div key={s.unitId || idx} className="p-2 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between text-xs font-mono">
-                                    <div>
-                                      <span className="font-bold text-slate-900 block">{s.serialNumber}</span>
-                                      <span className="text-[10px] text-slate-400 font-normal">
-                                        Added: {new Date(s.addedAt).toLocaleDateString('en-IN')} {new Date(s.addedAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                {item.serialNumbers.map((s, idx) => {
+                                  const sn = typeof s === 'object' ? s.serialNumber : s;
+                                  const dt = s?.addedAt ? new Date(s.addedAt) : new Date(item.createdAt);
+                                  const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+                                  return (
+                                    <div key={s?.unitId || idx} className="p-2 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between text-xs font-mono">
+                                      <div>
+                                        <span className="font-bold text-slate-900 block">{sn}</span>
+                                        <span className="text-[10px] text-slate-400 font-normal">
+                                          Added: {dt.toLocaleDateString('en-IN')} {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                      </div>
+                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${status === 'available' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
+                                        {status}
                                       </span>
                                     </div>
-                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${s.status === 'available' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                                      {s.status}
-                                    </span>
-                                  </div>
-                                ))}
+                                  );
+                                })}
                               </div>
                             </div>
                           </td>

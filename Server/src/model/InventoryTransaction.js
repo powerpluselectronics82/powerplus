@@ -57,6 +57,16 @@ const inventoryTransactionSchema = new mongoose.Schema(
       trim: true,
     },
 
+    sellingPrice: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    serialNumbers: {
+      type: [String],
+      default: [],
+    },
   },
   {
     timestamps: true,
