@@ -437,6 +437,8 @@ const addBranchInventory = async (req, res) => {
 			quantity: requestedQuantity,
 			mrp: inventoryMrp,
 			purchasePrice,
+			discountType,
+			discountValue,
 			barcode: product.barcode,
 		});
 
