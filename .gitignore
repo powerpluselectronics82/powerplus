@@ -1,7 +1,6 @@
 # Environment variables & secrets
 .env
 .env.*
-!.env.example
 *.env
 *.env.*
 *.pem
@@ -15,34 +14,29 @@ secret.*
 credentials.json
 service-account*.json
 
+# Dependencies & Build outputs
+node_modules/
+dist/
+build/
+*.local
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-# Dependencies and build outputs
-node_modules
-dist
-dist-ssr
-*.local
-
-# Database & local storage
+# Database & local dumps
 *.sqlite
 *.sqlite3
 *.db
+*.dump
+*.sql
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
+# System & IDE
 .DS_Store
 Thumbs.db
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
+.vscode/*
+!.vscode/extensions.json
+.idea/
