@@ -510,19 +510,19 @@ const getMonthlyInventoryReport = async (req, res) => {
 			.sort({ createdAt: -1 })
 			.lean();
 
-		// 2. Fetch BranchInventory records for purchasePrice lookup & non-serialized items
-		const invQuery = {};
-		if (companyId) invQuery.companyId = companyId;
-		if (branchId && mongoose.isValidObjectId(branchId)) invQuery.branchId = branchId;
+		// 2. Fetch inventory transactions for purchasePrice lookup & non-serialized items
+		const transactionQuery = { createdAt: { $gte: start, $lt: end } };
+		if (companyId) transactionQuery.companyId = companyId;
+		if (branchId && mongoose.isValidObjectId(branchId)) transactionQuery.branchId = branchId;
 
-		const allBranchInventory = await BranchInventory.find(invQuery)
+		const inventoryTransactions = await InventoryTransaction.find(transactionQuery)
 			.populate("productId")
 			.populate("branchId", "name code")
 			.sort({ createdAt: -1 })
 			.lean();
 
 		const getPurchasePriceForUnit = (prodId, branchIdVal, mrpVal) => {
-			const found = allBranchInventory.find(
+			const found = inventoryTransactions.find(
 				(inv) =>
 					String(inv.productId?._id || inv.productId) === String(prodId) &&
 					(!branchIdVal || String(inv.branchId?._id || inv.branchId) === String(branchIdVal)) &&
@@ -584,12 +584,11 @@ const getMonthlyInventoryReport = async (req, res) => {
 			}
 		}
 
-		// Process non-serialized BranchInventory records created/updated in this month DATE-WISE
-		for (const item of allBranchInventory) {
+		// Process non-serialized inventory transactions created in this month DATE-WISE
+		for (const item of inventoryTransactions) {
 			if (!item.productId || !item.productId._id || item.productId.isSerialized) continue;
 
 			const itemDate = new Date(item.createdAt);
-			if (itemDate < start || itemDate >= end) continue;
 
 			const prod = item.productId;
 			const branchObj = item.branchId || {};
@@ -597,7 +596,7 @@ const getMonthlyInventoryReport = async (req, res) => {
 			const key = `NONSERIAL_${prod._id}_${branchObj._id || "default"}_${item.mrp || 0}_${dateStr}`;
 
 			if (!reportMap.has(key)) {
-				const stock = Number(item.stock || 0);
+				const stock = Number(item.quantity || 0);
 				const purchasePrice = Number(item.purchasePrice || 0);
 				const mrp = Number(item.mrp || 0);
 				const discountVal = Number(item.discountValue || 0);
