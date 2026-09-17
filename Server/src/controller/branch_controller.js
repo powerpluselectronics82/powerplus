@@ -365,6 +365,13 @@ const updateBranchManager = async (req, res) => {
       });
     }
 
+    if (userToUpdate.role !== "BRANCH_MANAGER") {
+      return res.status(400).json({
+        success: false,
+        message: "Only employees with the BRANCH_MANAGER role can be assigned as branch manager",
+      });
+    }
+
     userToUpdate.branchId = branch._id;
     await userToUpdate.save();
 

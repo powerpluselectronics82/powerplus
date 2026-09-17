@@ -204,12 +204,16 @@ export const BranchesPage = () => {
 
   const openAssignModal = async (branch) => {
     setAssignModalBranch(branch);
+    setSelectedManagerId(branch.managerId || '');
     try {
       const res = await userService.getAllUsers();
       if (res?.success && Array.isArray(res.data)) {
-        setUsersList(res.data);
+        // Only show users whose role is BRANCH_MANAGER
+        const managersOnly = res.data.filter((u) => u.role === 'BRANCH_MANAGER');
+        setUsersList(managersOnly);
       } else if (Array.isArray(res)) {
-        setUsersList(res);
+        const managersOnly = res.filter((u) => u.role === 'BRANCH_MANAGER');
+        setUsersList(managersOnly);
       } else {
         setUsersList([]);
       }
@@ -765,25 +769,33 @@ export const BranchesPage = () => {
             <form onSubmit={handleAssignManagerSubmit} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 uppercase mb-1">
-                  Select User
+                  Select Branch Manager *
                 </label>
-                <select
-                  value={selectedManagerId}
-                  onChange={(e) => setSelectedManagerId(e.target.value)}
-                  className="input-tactile"
-                >
-                  <option value="">-- Choose User --</option>
-                  {Array.isArray(usersList) && usersList.map((u) => (
-                    <option key={u._id} value={u._id}>
-                      {renderSafeString(u.name)} ({renderSafeString(u.role)})
-                    </option>
-                  ))}
-                </select>
+                {usersList.length === 0 ? (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs leading-relaxed">
+                    No employees with the <strong>BRANCH_MANAGER</strong> role were found. Please register an employee as a <strong>Branch Manager</strong> in the Staff section first.
+                  </div>
+                ) : (
+                  <select
+                    value={selectedManagerId}
+                    onChange={(e) => setSelectedManagerId(e.target.value)}
+                    className="input-tactile font-bold"
+                    required
+                  >
+                    <option value="">-- Choose Branch Manager --</option>
+                    {usersList.map((u) => (
+                      <option key={u._id} value={u._id}>
+                        {renderSafeString(u.name)} {u.phone ? `(${u.phone})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <button
                 type="submit"
-                className="btn-primary w-full justify-center py-2.5 text-xs font-bold"
+                disabled={usersList.length === 0}
+                className="btn-primary w-full justify-center py-2.5 text-xs font-bold disabled:opacity-50"
               >
                 Save Manager Assignment
               </button>
