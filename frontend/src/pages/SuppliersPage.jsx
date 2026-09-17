@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { supplierService } from '../services/supplierService';
 import { useAuth } from '../context/AuthContext';
 import { Truck, Plus, Phone, Mail, FileText, X, Trash2 } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchSuppliers, addSupplierToStore } from '../redux/slices/suppliersSlice';
 
 export const SuppliersPage = () => {
+  const dispatch = useAppDispatch();
   const { companyId } = useAuth();
-  const [suppliers, setSuppliers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { suppliers, loading } = useAppSelector((state) => state.suppliers);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const [form, setForm] = useState({
@@ -20,23 +22,13 @@ export const SuppliersPage = () => {
   const [error, setError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
 
-  const loadSuppliers = async () => {
-    setLoading(true);
-    try {
-      const res = await supplierService.getAllSuppliers();
-      if (res.success && Array.isArray(res.data)) {
-        setSuppliers(res.data);
-      }
-    } catch (err) {
-      console.error('Suppliers load error:', err);
-    } finally {
-      setLoading(false);
-    }
+  const loadSuppliers = (force = false) => {
+    dispatch(fetchSuppliers({ force }));
   };
 
   useEffect(() => {
     loadSuppliers();
-  }, []);
+  }, [dispatch]);
 
   const handlePhoneChange = (index, value) => {
     const updated = [...form.phoneNumbers];
@@ -81,7 +73,10 @@ export const SuppliersPage = () => {
       if (res.success) {
         setIsAddModalOpen(false);
         setForm({ name: '', brand: '', gstin: '', phoneNumbers: [''], email: '', address: '' });
-        loadSuppliers();
+        if (res.data) {
+          dispatch(addSupplierToStore(res.data));
+        }
+        loadSuppliers(true);
       } else {
         setError(res.message || 'Failed to add supplier');
       }

@@ -35,7 +35,12 @@ const getProductPrice = (product) => {
   return Number(product.sellingPrice ?? mrp);
 };
 
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchBranchProducts, invalidateProductCaches } from '../redux/slices/productsSlice';
+import { invalidateSalesCache } from '../redux/slices/salesSlice';
+
 export const PosPage = () => {
+  const dispatch = useAppDispatch();
   const { user, companyId } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
   const {
@@ -55,12 +60,14 @@ export const PosPage = () => {
     completedSale,
     setCompletedSale,
     totals,
+    isInvoiceOpen,
+    setIsInvoiceOpen,
   } = useCart();
 
-  const [products, setProducts] = useState([]);
+  // Redux Cached Branch Products
+  const { branchProducts: products, branchLoading: loading } = useAppSelector((state) => state.products);
   const [search, setSearch] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
-  const [loading, setLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -71,24 +78,14 @@ export const PosPage = () => {
   const [serialError, setSerialError] = useState('');
 
   // Fetch branch inventory
-  const loadProducts = async () => {
+  const loadProducts = (force = false) => {
     if (!selectedBranchId) return;
-    setLoading(true);
-    try {
-      const res = await productService.getBranchProducts(selectedBranchId);
-      if (res.success && Array.isArray(res.data)) {
-        setProducts(res.data);
-      }
-    } catch (err) {
-      console.error('POS product load error:', err);
-    } finally {
-      setLoading(false);
-    }
+    dispatch(fetchBranchProducts({ branchId: selectedBranchId, force }));
   };
 
   useEffect(() => {
     loadProducts();
-  }, [selectedBranchId]);
+  }, [selectedBranchId, dispatch]);
 
   // Select/Click Product Handler
   const handleSelectProduct = (product) => {
@@ -304,7 +301,9 @@ export const PosPage = () => {
       if (res.success && res.data) {
         setCompletedSale(res.data);
         clearCart();
-        loadProducts(); // refresh available stock
+        dispatch(invalidateProductCaches());
+        dispatch(invalidateSalesCache());
+        loadProducts(true); // refresh available stock
       }
     } catch (err) {
       setError(err.message);

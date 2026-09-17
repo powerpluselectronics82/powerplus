@@ -27,10 +27,13 @@ const renderSafeString = (val, fallback = '') => {
   return String(val);
 };
 
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchBranches, addBranchToStore, updateBranchInStore } from '../redux/slices/branchesSlice';
+
 export const BranchesPage = () => {
+  const dispatch = useAppDispatch();
   const { role, companyId } = useAuth();
-  const [branches, setBranches] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { branches, loading } = useAppSelector((state) => state.branches);
   const [error, setError] = useState('');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
@@ -98,30 +101,13 @@ export const BranchesPage = () => {
   const [usersList, setUsersList] = useState([]);
   const [selectedManagerId, setSelectedManagerId] = useState('');
 
-  const loadBranches = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await branchService.getAllBranches();
-      if (res?.success && Array.isArray(res.data)) {
-        setBranches(res.data);
-      } else if (Array.isArray(res)) {
-        setBranches(res);
-      } else {
-        setBranches([]);
-      }
-    } catch (err) {
-      console.error('Branches load error:', err);
-      setError(err.message || 'Unable to load branches. You may need Owner permissions.');
-      setBranches([]);
-    } finally {
-      setLoading(false);
-    }
+  const loadBranches = (force = false) => {
+    dispatch(fetchBranches({ force }));
   };
 
   useEffect(() => {
     loadBranches();
-  }, []);
+  }, [dispatch]);
 
   const handleAddBranchSubmit = async (e) => {
     e.preventDefault();

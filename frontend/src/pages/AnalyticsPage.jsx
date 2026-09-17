@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { saleService } from '../services/saleService';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchAnalyticsSummary } from '../redux/slices/analyticsSlice';
 import {
   BarChart3,
   TrendingUp,
@@ -27,35 +28,13 @@ import {
 export const AnalyticsPage = () => {
   const { role } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
+  const dispatch = useAppDispatch();
   const [period, setPeriod] = useState('month'); // day | month | year
-  const [summaryData, setSummaryData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const loadSummary = async () => {
-    setLoading(true);
-    try {
-      let res;
-      if (period === 'day') {
-        res = await saleService.getSummaryDay(selectedBranchId);
-      } else if (period === 'month') {
-        res = await saleService.getSummaryMonth(selectedBranchId);
-      } else {
-        res = await saleService.getSummaryYear(selectedBranchId);
-      }
-
-      if (res?.success) {
-        setSummaryData(res.data);
-      }
-    } catch (err) {
-      console.error('Analytics load error:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { summaryData, loading } = useAppSelector((state) => state.analytics);
 
   useEffect(() => {
-    loadSummary();
-  }, [selectedBranchId, period]);
+    dispatch(fetchAnalyticsSummary({ branchId: selectedBranchId, period }));
+  }, [selectedBranchId, period, dispatch]);
 
   // Mock comparison breakdown for charts based on summary data
   const chartData = summaryData

@@ -23,17 +23,33 @@ import {
   ChevronRight,
 } from 'lucide-react';
 
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchBranchProducts, fetchCatalogProducts, fetchStockValuation } from '../redux/slices/productsSlice';
+
 export const ProductsPage = () => {
+  const dispatch = useAppDispatch();
   const { role } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
 
   const currentMonthStr = new Date().toISOString().slice(0, 7);
 
-  const [products, setProducts] = useState([]);
-  const [valuation, setValuation] = useState(null);
+  // Redux Cached State
+  const {
+    catalogProducts,
+    branchProducts,
+    stockValuation: valuation,
+    catalogLoading,
+    branchLoading,
+  } = useAppSelector((state) => state.products);
+
+  const products = selectedBranchId && branchProducts.length > 0
+    ? branchProducts
+    : (catalogProducts.length > 0 ? catalogProducts : branchProducts);
+
+  const loading = (branchLoading && products.length === 0) || (catalogLoading && products.length === 0);
+
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('ALL'); // ALL | MONTHLY_REPORT | LOW_STOCK | ARCHIVED
-  const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddStockModalOpen, setIsAddStockModalOpen] = useState(false);
   const [isCatBrandModalOpen, setIsCatBrandModalOpen] = useState(false);
@@ -46,57 +62,12 @@ export const ProductsPage = () => {
   const [monthlyReportLoading, setMonthlyReportLoading] = useState(false);
   const [expandedSerials, setExpandedSerials] = useState({});
 
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      let branchProducts = [];
-      let globalProducts = [];
-
-      if (selectedBranchId) {
-        try {
-          const res = await productService.getBranchProducts(selectedBranchId);
-          if (res?.success && Array.isArray(res.data)) {
-            branchProducts = res.data;
-          }
-        } catch (err) {
-          console.warn('Branch inventory load note:', err.message);
-        }
-      }
-
-      try {
-        const globalRes = await productService.getAllProducts();
-        if (globalRes?.success && Array.isArray(globalRes.data)) {
-          globalProducts = globalRes.data;
-        }
-      } catch (err) {
-        console.warn('Global products load note:', err.message);
-      }
-
-      if (selectedBranchId && branchProducts.length > 0) {
-        setProducts(branchProducts);
-      } else if (globalProducts.length > 0) {
-        setProducts(globalProducts);
-      } else if (branchProducts.length > 0) {
-        setProducts(branchProducts);
-      } else {
-        setProducts([]);
-      }
-
-      // Stock valuation
-      let valRes;
-      if (role === 'OWNER' && !selectedBranchId) {
-        valRes = await productService.getAllStockValuation();
-      } else if (selectedBranchId) {
-        valRes = await productService.getBranchStockValuation(selectedBranchId);
-      }
-      if (valRes?.success) {
-        setValuation(valRes.data);
-      }
-    } catch (err) {
-      console.error('Products load error:', err);
-    } finally {
-      setLoading(false);
+  const loadData = (force = false) => {
+    if (selectedBranchId) {
+      dispatch(fetchBranchProducts({ branchId: selectedBranchId, force }));
     }
+    dispatch(fetchCatalogProducts({ force }));
+    dispatch(fetchStockValuation({ branchId: selectedBranchId, force }));
   };
 
   const loadMonthlyReport = async (targetMonth) => {

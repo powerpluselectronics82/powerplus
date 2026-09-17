@@ -4,12 +4,16 @@ import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { Users, Plus, Shield, CheckCircle, XCircle, X, Search, GitBranch, Eye, CreditCard, MapPin, Calendar, Mail, Phone, UserCheck } from 'lucide-react';
 
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchStaff, addStaffToStore, updateStaffStatusInStore } from '../redux/slices/staffSlice';
+
 export const StaffPage = () => {
+  const dispatch = useAppDispatch();
   const { role, companyId } = useAuth();
   const { selectedBranchId, branches, currentBranch } = useBranch();
 
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // Redux Cached State
+  const { staffList: users, loading } = useAppSelector((state) => state.staff);
   const [viewMode, setViewMode] = useState('ALL'); // 'ALL' | 'BRANCH'
   const [search, setSearch] = useState('');
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
@@ -29,31 +33,13 @@ export const StaffPage = () => {
   const [regError, setRegError] = useState('');
   const [regLoading, setRegLoading] = useState(false);
 
-  const loadUsers = async () => {
-    setLoading(true);
-    try {
-      let res;
-      if (viewMode === 'ALL' || (role === 'OWNER' && !selectedBranchId)) {
-        res = await userService.getAllUsers();
-      } else if (selectedBranchId) {
-        res = await userService.getBranchUsers(selectedBranchId);
-      } else {
-        res = await userService.getAllUsers();
-      }
-
-      if (res?.success && Array.isArray(res.data)) {
-        setUsers(res.data);
-      }
-    } catch (err) {
-      console.error('Users load error:', err);
-    } finally {
-      setLoading(false);
-    }
+  const loadUsers = (force = false) => {
+    dispatch(fetchStaff({ branchId: selectedBranchId, viewMode, force }));
   };
 
   useEffect(() => {
     loadUsers();
-  }, [selectedBranchId, role, viewMode]);
+  }, [selectedBranchId, role, viewMode, dispatch]);
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
@@ -71,7 +57,16 @@ export const StaffPage = () => {
       if (res.success) {
         setIsRegisterModalOpen(false);
         setRegForm({ name: '', email: '', phone: '', password: '', role: 'CASHIER', branchId: '', adharNumber: '', dob: '', address: '' });
-        loadUsers();
+        
+        // Optimistically add to Redux store immediately
+        if (res.data) {
+          dispatch(addStaffToStore({
+            ...res.data,
+            _id: res.data._id || res.data.userId,
+            status: res.data.status || 'ACTIVE',
+          }));
+        }
+        loadUsers(true);
       }
     } catch (err) {
       setRegError(err.message);
@@ -83,7 +78,9 @@ export const StaffPage = () => {
   const handleToggleStatus = async (userId) => {
     try {
       const res = await userService.toggleUserStatus(userId);
-      if (res.success) loadUsers();
+      if (res.success) {
+        dispatch(updateStaffStatusInStore({ userId, status: res.data?.status }));
+      }
     } catch (err) {
       alert(err.message);
     }

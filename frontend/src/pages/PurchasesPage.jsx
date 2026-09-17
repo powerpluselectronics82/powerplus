@@ -21,11 +21,15 @@ import {
 import { CreatePurchaseModal } from '../components/inventory/CreatePurchaseModal';
 import { PurchaseInvoiceModal } from '../components/inventory/PurchaseInvoiceModal';
 
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchPurchases, invalidatePurchasesCache } from '../redux/slices/purchasesSlice';
+import { invalidateProductsCache } from '../redux/slices/productsSlice';
+
 export const PurchasesPage = () => {
+  const dispatch = useAppDispatch();
   const { role, company } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
-  const [purchases, setPurchases] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { purchases, loading } = useAppSelector((state) => state.purchases);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,33 +37,14 @@ export const PurchasesPage = () => {
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
-  const loadPurchases = async () => {
-    setLoading(true);
-    try {
-      let res;
-      if (role === 'OWNER' && !selectedBranchId) {
-        res = await purchaseService.getAllPurchases();
-      } else {
-        const bId = selectedBranchId || currentBranch?._id;
-        if (bId) {
-          res = await purchaseService.getBranchPurchases(bId);
-        } else {
-          res = await purchaseService.getAllPurchases();
-        }
-      }
-      if (res?.success && Array.isArray(res.data)) {
-        setPurchases(res.data);
-      }
-    } catch (err) {
-      console.error('Purchases load error:', err);
-    } finally {
-      setLoading(false);
-    }
+  const loadPurchases = (force = false) => {
+    const bId = (role === 'OWNER' && !selectedBranchId) ? null : (selectedBranchId || currentBranch?._id);
+    dispatch(fetchPurchases({ branchId: bId, force }));
   };
 
   useEffect(() => {
     loadPurchases();
-  }, [selectedBranchId, role]);
+  }, [selectedBranchId, role, dispatch]);
 
   const handleOpenPdf = (purchaseItem) => {
     setSelectedPurchase(purchaseItem);
@@ -374,7 +359,9 @@ export const PurchasesPage = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
-          loadPurchases();
+          dispatch(invalidatePurchasesCache());
+          dispatch(invalidateProductsCache());
+          loadPurchases(true);
         }}
       />
 

@@ -23,19 +23,24 @@ import {
   FileSpreadsheet,
   X,
 } from 'lucide-react';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import { fetchStockValuation, fetchLowStockProducts } from '../redux/slices/productsSlice';
+import { fetchDailySummary, fetchMonthlySales } from '../redux/slices/salesSlice';
 
 export const DashboardPage = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const { role, user } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
 
-  const [valuation, setValuation] = useState({ totalValue: 0, products: [] });
-  const [lowStock, setLowStock] = useState([]);
-  const [dailySummary, setDailySummary] = useState(null);
-  const [monthlySales, setMonthlySales] = useState(null);
+  // Redux Cached State
+  const { stockValuation: reduxValuation, lowStockProducts: lowStock, valuationLoading, lowStockLoading } = useAppSelector((state) => state.products);
+  const { dailySummary, monthlySales, dailyLoading, monthlyLoading } = useAppSelector((state) => state.sales);
+
+  const valuation = reduxValuation || { totalValue: 0, products: [] };
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // YYYY-MM
   const [monthlySearch, setMonthlySearch] = useState('');
-  const [loading, setLoading] = useState(true);
+  const loading = valuationLoading || dailyLoading;
 
   // Tax Invoice Modal State
   const [selectedInvoiceSale, setSelectedInvoiceSale] = useState(null);
@@ -156,51 +161,18 @@ export const DashboardPage = () => {
     window.print();
   };
 
-  const loadDashboardData = async () => {
-    setLoading(true);
-    try {
-      // Stock valuation
-      let valRes;
-      if (role === 'OWNER' && !selectedBranchId) {
-        valRes = await productService.getAllStockValuation();
-      } else if (selectedBranchId) {
-        valRes = await productService.getBranchStockValuation(selectedBranchId);
-      }
-      if (valRes?.success) {
-        setValuation(valRes.data);
-      }
-
-      // Low stock products
-      const lowRes = await productService.getLowStockProducts(selectedBranchId);
-      if (lowRes?.success && Array.isArray(lowRes.data)) {
-        setLowStock(lowRes.data);
-      }
-
-      // Daily summary
-      const summaryRes = await saleService.getSummaryDay(selectedBranchId);
-      if (summaryRes?.success) {
-        setDailySummary(summaryRes.data);
-      }
-
-      // Monthly branch sales (/api/branchSales/:branchId/month)
-      if (selectedBranchId) {
-        const monthRes = await saleService.getBranchMonthlySales(selectedBranchId, selectedMonth);
-        if (monthRes?.success) {
-          setMonthlySales(monthRes.data);
-        }
-      } else {
-        setMonthlySales(null);
-      }
-    } catch (err) {
-      console.error('Dashboard load error:', err);
-    } finally {
-      setLoading(false);
+  const loadDashboardData = (force = false) => {
+    dispatch(fetchStockValuation({ branchId: selectedBranchId, force }));
+    dispatch(fetchLowStockProducts({ branchId: selectedBranchId, force }));
+    dispatch(fetchDailySummary({ branchId: selectedBranchId, force }));
+    if (selectedBranchId) {
+      dispatch(fetchMonthlySales({ branchId: selectedBranchId, month: selectedMonth, force }));
     }
   };
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedBranchId, selectedMonth, role]);
+  }, [selectedBranchId, selectedMonth, role, dispatch]);
 
   const monthSalesList = Array.isArray(monthlySales?.sales) ? monthlySales.sales : [];
   const filteredMonthSales = monthSalesList.filter((s) => {
