@@ -1,10 +1,91 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { X, Printer, Download, CheckCircle, Building2 } from 'lucide-react';
 import { numberToWordsInINR } from '../../utils/numberToWords';
 import companyLogo from '../../assets/logo.jpeg';
+import { useBranch } from '../../context/BranchContext';
+import { useAppSelector } from '../../redux/hooks';
 
 export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
   if (!isOpen || !sale) return null;
+
+  const branchContext = useBranch?.() || {};
+  const contextBranches = branchContext.branches || [];
+  const contextCurrentBranch = branchContext.currentBranch || null;
+  const reduxBranches = useAppSelector((state) => state?.branches?.branches) || [];
+
+  const targetBranch = useMemo(() => {
+    if (branch && typeof branch === 'object' && (branch.phone || branch.code || branch.name)) {
+      return branch;
+    }
+    const saleBranchId = typeof sale?.branchId === 'object' ? sale?.branchId?._id : sale?.branchId;
+    const branchIdentifier = typeof branch === 'string' ? branch : saleBranchId;
+
+    const allBranches = [
+      ...(Array.isArray(contextBranches) ? contextBranches : []),
+      ...(Array.isArray(reduxBranches) ? reduxBranches : []),
+    ];
+
+    if (branchIdentifier) {
+      const match = allBranches.find((b) => String(b._id) === String(branchIdentifier));
+      if (match) return match;
+    }
+
+    if (sale?.branchId && typeof sale.branchId === 'object') {
+      return sale.branchId;
+    }
+
+    return contextCurrentBranch || branch || null;
+  }, [branch, sale, contextBranches, reduxBranches, contextCurrentBranch]);
+
+  const contactNo = useMemo(() => {
+    const rawPhones = targetBranch?.phone || branch?.phone || sale?.branchPhone || targetBranch?.phones;
+    const phoneList = [];
+
+    if (Array.isArray(rawPhones)) {
+      rawPhones.forEach((p) => {
+        if (!p) return;
+        const num = typeof p === 'object' ? (p.number || p.phone || p.contact) : p;
+        if (num && typeof num === 'string' && num.trim()) {
+          phoneList.push(num.trim());
+        }
+      });
+    } else if (typeof rawPhones === 'string' && rawPhones.trim()) {
+      rawPhones.split(',').forEach((n) => {
+        if (n.trim()) phoneList.push(n.trim());
+      });
+    }
+
+    if (phoneList.length === 0) {
+      const fallbackSingle =
+        targetBranch?.phoneNumber ||
+        branch?.phoneNumber ||
+        targetBranch?.contactNumber ||
+        branch?.contactNumber;
+      if (fallbackSingle && typeof fallbackSingle === 'string' && fallbackSingle.trim()) {
+        phoneList.push(fallbackSingle.trim());
+      }
+    }
+
+    const uniquePhones = Array.from(new Set(phoneList));
+
+    if (uniquePhones.length > 0) {
+      return uniquePhones.join(', ');
+    }
+
+    const compPhone = company?.phone;
+    if (compPhone) {
+      if (Array.isArray(compPhone)) {
+        const cpList = compPhone
+          .map((cp) => (typeof cp === 'object' ? cp?.number || cp?.phone : cp))
+          .filter((cp) => cp && typeof cp === 'string' && cp.trim());
+        if (cpList.length > 0) return Array.from(new Set(cpList)).join(', ');
+      } else if (typeof compPhone === 'string' && compPhone.trim()) {
+        return compPhone.trim();
+      }
+    }
+
+    return '+91-7004897821, +91-6181241056';
+  }, [targetBranch, branch, sale, company]);
 
   const handlePrint = () => {
     const printArea = document.getElementById('tax-invoice-print-area');
@@ -86,16 +167,24 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
     ? new Date(sale.createdAt).toLocaleDateString('en-IN')
     : new Date().toLocaleDateString('en-IN');
 
-  const customerName = sale.customerName || 'Walk-in Customer';
-  const customerPhone = sale.customerPhone || '+91-9999999999';
-  const customerAddress = sale.customerAddress || 'BHOJPUR BIHAR, Bihar, India';
+  const customerName = sale.customerName || sale.buyerName || sale.customer?.name || 'Walk-in Customer';
+  const customerPhone = sale.customerPhone || sale.buyerPhone || sale.customer?.phone || '';
+  const customerAddress =
+    sale.customerAddress ||
+    sale.buyerAddress ||
+    sale.customer?.address ||
+    sale.address ||
+    '';
   const cashierName = sale.cashierName || 'Cashier';
-  const branchName = sale.branchName || branch?.name || 'Main Branch';
-  const branchCode = branch?.code || 'BR01';
+  const branchName = sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
+  const branchCode = targetBranch?.code || branch?.code || 'BR01';
   const companyName = company?.name || 'POWER PLUS ELECTRONICS';
-  const companyGstin = company?.gstin || branch?.gstin || '10AAGCK1649C1Z4';
+  const companyGstin = company?.gstin || targetBranch?.gstin || branch?.gstin || '10AAGCK1649C1Z4';
   const companyId = company?.companyId || 'U74110KA2016PTC093403';
-  const companyAddress = company?.address || branch?.address || 'No. 38/ Agora Plaza, Dak Bangala Road, Bihiya Bihar 802152, India';
+  const companyAddress =
+    targetBranch?.address && typeof targetBranch.address === 'string' && targetBranch.address.trim()
+      ? targetBranch.address
+      : (company?.address || branch?.address || 'No. 38/ Agora Plaza, Dak Bangala Road, Bihiya Bihar 802152, India');
 
   const items = Array.isArray(sale.items) && sale.items.length > 0 ? sale.items : [];
   const subtotal = sale.subtotal || sale.grandTotal || 0;
@@ -159,7 +248,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
                   <p className="text-slate-600">Company ID : {companyId}</p>
                   <p className="text-slate-600 leading-tight">{companyAddress}</p>
                   <p className="font-semibold text-slate-800 pt-0.5">GSTIN: {companyGstin}</p>
-                  <p className="text-slate-600">Contact No : +91-7004897821, +91-6181241056</p>
+                  <p className="text-slate-600">Contact No : {contactNo}</p>
                 </div>
               </div>
 
@@ -187,10 +276,6 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
                     <span className="text-slate-800">: {saleDate}</span>
                   </div>
                   <div className="flex justify-between border-t border-slate-200 pt-1">
-                    <span className="font-bold text-slate-600">Place Of Supply</span>
-                    <span className="text-slate-800">: Bihar (10)</span>
-                  </div>
-                  <div className="flex justify-between">
                     <span className="font-bold text-slate-600">Sales person</span>
                     <span className="font-bold text-slate-900">: {cashierName.toUpperCase()}</span>
                   </div>
@@ -198,24 +283,22 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
               </div>
             </div>
 
-            {/* Bill To & Ship To Grid */}
-            <div className="border-x border-b border-slate-800 grid grid-cols-2 text-[11px]">
-              <div className="p-3 border-r border-slate-800 space-y-1">
-                <span className="font-extrabold text-slate-400 uppercase tracking-widest block text-[10px]">
-                  Bill To
-                </span>
-                <h4 className="font-extrabold text-slate-900 text-xs">{customerName}</h4>
-                <p className="text-slate-600 font-mono">{customerPhone}</p>
-                <p className="text-slate-600">{customerAddress}</p>
-              </div>
-
-              <div className="p-3 space-y-1 bg-slate-50/50">
-                <span className="font-extrabold text-slate-400 uppercase tracking-widest block text-[10px]">
-                  Ship To
-                </span>
-                <h4 className="font-bold text-slate-800 text-xs">{customerName}</h4>
-                <p className="text-slate-600">{customerAddress}</p>
-              </div>
+            {/* Bill To Section */}
+            <div className="border-x border-b border-slate-800 p-3 text-[11px] space-y-1">
+              <span className="font-extrabold text-slate-400 uppercase tracking-widest block text-[10px]">
+                Bill To
+              </span>
+              <h4 className="font-extrabold text-slate-900 text-xs">{customerName}</h4>
+              {customerPhone && (
+                <p className="text-slate-600 font-mono">
+                  <span className="font-semibold text-slate-700">Contact No : </span>
+                  {customerPhone}
+                </p>
+              )}
+              <p className="text-slate-600 leading-tight">
+                <span className="font-semibold text-slate-700">Buyer Address : </span>
+                {customerAddress || 'N/A'}
+              </p>
             </div>
 
             {/* Payment Remark Subject Banner */}
