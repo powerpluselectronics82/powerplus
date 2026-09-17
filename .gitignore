@@ -9,6 +9,9 @@
 *.crt
 *.pfx
 *.p12
+.env
+.env.*
+.env.example
 secrets.*
 secret.*
 credentials.json
