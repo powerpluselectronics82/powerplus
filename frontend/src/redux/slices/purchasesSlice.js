@@ -5,8 +5,9 @@ const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 
 export const fetchPurchases = createAsyncThunk(
   'purchases/fetchAll',
-  async (branchId, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
+      const branchId = typeof arg === 'object' && arg !== null ? arg.branchId : arg;
       const res = branchId
         ? await purchaseService.getBranchPurchases(branchId)
         : await purchaseService.getAllPurchases();

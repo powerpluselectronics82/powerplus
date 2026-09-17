@@ -37,7 +37,8 @@ const getProductPrice = (product) => {
 
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { fetchBranchProducts, invalidateProductCaches } from '../redux/slices/productsSlice';
-import { invalidateSalesCache } from '../redux/slices/salesSlice';
+import { invalidateSalesCache, recordSaleInDailySummary } from '../redux/slices/salesSlice';
+import { invalidateAnalyticsCache } from '../redux/slices/analyticsSlice';
 
 export const PosPage = () => {
   const dispatch = useAppDispatch();
@@ -77,15 +78,17 @@ export const PosPage = () => {
   const [serialInput, setSerialInput] = useState('');
   const [serialError, setSerialError] = useState('');
 
+  const activeBranchId = selectedBranchId || currentBranch?._id || user?.branchId;
+
   // Fetch branch inventory
   const loadProducts = (force = false) => {
-    if (!selectedBranchId) return;
-    dispatch(fetchBranchProducts({ branchId: selectedBranchId, force }));
+    if (!activeBranchId) return;
+    dispatch(fetchBranchProducts({ branchId: activeBranchId, force }));
   };
 
   useEffect(() => {
     loadProducts();
-  }, [selectedBranchId, dispatch]);
+  }, [activeBranchId, dispatch]);
 
   // Select/Click Product Handler
   const handleSelectProduct = (product) => {
@@ -135,9 +138,9 @@ export const PosPage = () => {
     }
 
     // If not found in local state, try API lookup for verification
-    if (!matchedUnit && selectedBranchId) {
+    if (!matchedUnit && activeBranchId) {
       try {
-        const apiRes = await productService.getProductBySerialNumber(selectedBranchId, cleanSerial);
+        const apiRes = await productService.getProductBySerialNumber(activeBranchId, cleanSerial);
         if (apiRes?.success && apiRes?.data) {
           const apiProdId = String(apiRes.data._id || apiRes.data.productId?._id || apiRes.data.productId || '');
           if (apiProdId === String(pendingSerialProduct._id)) {
@@ -231,9 +234,9 @@ export const PosPage = () => {
     }
 
     // 3. Fallback: try serial lookup via API
-    if (selectedBranchId) {
+    if (activeBranchId) {
       try {
-        const serialRes = await productService.getProductBySerialNumber(selectedBranchId, query);
+        const serialRes = await productService.getProductBySerialNumber(activeBranchId, query);
         if (serialRes?.success && serialRes?.data) {
           addItemByProduct(serialRes.data, 1, query);
           setBarcodeInput('');
@@ -270,7 +273,7 @@ export const PosPage = () => {
   // Checkout sale submission
   const handleCheckout = async () => {
     if (items.length === 0) return;
-    if (!selectedBranchId) {
+    if (!activeBranchId) {
       setError('Branch not selected');
       return;
     }
@@ -279,7 +282,7 @@ export const PosPage = () => {
 
     const payload = {
       companyId: companyId || user?.companyId,
-      branchId: selectedBranchId,
+      branchId: activeBranchId,
       customerName: customerName || 'Walk-in Customer',
       customerPhone: customerPhone || '9999999999',
       customerAddress: customerAddress || '',
@@ -301,8 +304,9 @@ export const PosPage = () => {
       if (res.success && res.data) {
         setCompletedSale(res.data);
         clearCart();
+        dispatch(recordSaleInDailySummary(res.data));
         dispatch(invalidateProductCaches());
-        dispatch(invalidateSalesCache());
+        dispatch(invalidateAnalyticsCache());
         loadProducts(true); // refresh available stock
       }
     } catch (err) {

@@ -17,6 +17,10 @@ import { supplierService } from '../../services/supplierService';
 import { productService } from '../../services/productService';
 import { purchaseService } from '../../services/purchaseService';
 import { useBranch } from '../../context/BranchContext';
+import { useAppDispatch, useAppSelector } from '../../redux/hooks';
+import { fetchSuppliers } from '../../redux/slices/suppliersSlice';
+import { fetchCatalogProducts, invalidateProductCaches } from '../../redux/slices/productsSlice';
+import { addPurchaseToStore } from '../../redux/slices/purchasesSlice';
 
 // Searchable Product Combobox with Confirmed Fill Card for Purchase Invoice rows
 const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => {
@@ -234,6 +238,9 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
 };
 
 export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
+  const dispatch = useAppDispatch();
+  const { suppliers: reduxSuppliers } = useAppSelector((state) => state.suppliers);
+  const { catalogProducts: reduxCatalog } = useAppSelector((state) => state.products);
   const { currentBranch, selectedBranchId } = useBranch();
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
@@ -301,20 +308,25 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      // 1. Fetch suppliers
-      // 2. Fetch ALL master catalog products created in the Product section
-      // 3. Optionally fetch branch products to attach any existing branch pricing/MRP
-      const [supRes, allProdRes, branchProdRes] = await Promise.all([
-        supplierService.getAllSuppliers(),
-        productService.getAllProducts(),
-        selectedBranchId
-          ? productService.getBranchProducts(selectedBranchId)
-          : Promise.resolve({ success: false, data: [] }),
-      ]);
-
-      if (supRes?.success) {
-        setSuppliers(supRes.data || []);
+      // 1. Fetch suppliers (from Redux cache or API fallback)
+      let supList = reduxSuppliers;
+      if (!supList || supList.length === 0) {
+        const supRes = await supplierService.getAllSuppliers();
+        if (supRes?.success) supList = supRes.data || [];
       }
+      setSuppliers(supList || []);
+
+      // 2. Fetch master catalog products (from Redux cache or API fallback)
+      let catList = reduxCatalog;
+      if (!catList || catList.length === 0) {
+        const allProdRes = await productService.getAllProducts();
+        if (allProdRes?.success) catList = allProdRes.data || [];
+      }
+
+      // 3. Optionally fetch branch products to attach any existing branch pricing/MRP
+      const branchProdRes = selectedBranchId
+        ? await productService.getBranchProducts(selectedBranchId)
+        : { success: false, data: [] };
 
       // Map branch pricing by product ID and barcode if available
       const branchPriceMap = new Map();
@@ -341,8 +353,8 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
       const seenIds = new Set();
 
       // Prioritize ALL products created in the Product Section (Master Catalog)
-      if (allProdRes?.success && Array.isArray(allProdRes.data)) {
-        for (const p of allProdRes.data) {
+      if (Array.isArray(catList)) {
+        for (const p of catList) {
           if (!p) continue;
           const barcode = p.barcode ? String(p.barcode).trim().toLowerCase() : null;
           const id = p._id ? String(p._id) : null;
@@ -571,6 +583,10 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
 
       const res = await purchaseService.createPurchase(payload);
       if (res?.success) {
+        if (res.data) {
+          dispatch(addPurchaseToStore(res.data));
+        }
+        dispatch(invalidateProductCaches());
         onSuccess && onSuccess();
         onClose();
       } else {

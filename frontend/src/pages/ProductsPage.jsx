@@ -24,7 +24,12 @@ import {
 } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
-import { fetchBranchProducts, fetchCatalogProducts, fetchStockValuation } from '../redux/slices/productsSlice';
+import {
+  fetchBranchProducts,
+  fetchCatalogProducts,
+  fetchStockValuation,
+  toggleProductStatusInStore,
+} from '../redux/slices/productsSlice';
 
 export const ProductsPage = () => {
   const dispatch = useAppDispatch();
@@ -63,17 +68,18 @@ export const ProductsPage = () => {
   const [expandedSerials, setExpandedSerials] = useState({});
 
   const loadData = (force = false) => {
-    if (selectedBranchId) {
-      dispatch(fetchBranchProducts({ branchId: selectedBranchId, force }));
+    const bId = selectedBranchId || currentBranch?._id;
+    if (bId) {
+      dispatch(fetchBranchProducts({ branchId: bId, force }));
     }
     dispatch(fetchCatalogProducts({ force }));
-    dispatch(fetchStockValuation({ branchId: selectedBranchId, force }));
+    dispatch(fetchStockValuation({ branchId: bId, force }));
   };
 
   const loadMonthlyReport = async (targetMonth) => {
     setMonthlyReportLoading(true);
     try {
-      const res = await productService.getMonthlyInventoryReport(selectedBranchId || '', targetMonth);
+      const res = await productService.getMonthlyInventoryReport(selectedBranchId || currentBranch?._id || '', targetMonth);
       if (res?.success) {
         setMonthlyReportData(res.data);
       } else {
@@ -89,7 +95,7 @@ export const ProductsPage = () => {
 
   useEffect(() => {
     loadData();
-  }, [selectedBranchId, role]);
+  }, [selectedBranchId, currentBranch?._id, role]);
 
   useEffect(() => {
     if (tab === 'MONTHLY_REPORT') {
@@ -107,14 +113,18 @@ export const ProductsPage = () => {
       return;
     }
 
+    // Optimistically toggle status in Redux
+    dispatch(toggleProductStatusInStore(productId));
+
     try {
       const res = await productService.toggleProductStatus(productId);
-      if (res.success) {
-        loadData();
-      } else {
+      if (!res.success) {
+        // Revert on failure
+        dispatch(toggleProductStatusInStore(productId));
         alert(res.message || 'Failed to update product status');
       }
     } catch (err) {
+      dispatch(toggleProductStatusInStore(productId));
       alert(err.message || 'Failed to update product status');
     }
   };

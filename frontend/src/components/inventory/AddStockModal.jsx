@@ -2,8 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Plus, Boxes, Barcode, Calendar, Percent, Hash, AlertCircle, FileText, Check, ChevronDown } from 'lucide-react';
 import { productService } from '../../services/productService';
 import { useBranch } from '../../context/BranchContext';
+import { useAppDispatch, useAppSelector } from '../../redux/hooks';
+import {
+  fetchCatalogProducts,
+  invalidateProductCaches,
+  updateBranchInventoryStock,
+} from '../../redux/slices/productsSlice';
 
 export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
+  const dispatch = useAppDispatch();
+  const { catalogProducts: reduxCatalog } = useAppSelector((state) => state.products);
   const { selectedBranchId, currentBranch, branches } = useBranch();
   const [products, setProducts] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -35,12 +43,16 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
 
   useEffect(() => {
     if (isOpen) {
-      fetchCatalogProducts();
+      if (reduxCatalog && reduxCatalog.length > 0) {
+        setProducts(reduxCatalog);
+      } else {
+        fetchCatalogProducts();
+      }
       setProductSearch('');
       setSelectedProduct(null);
       setIsDropdownOpen(false);
     }
-  }, [isOpen]);
+  }, [isOpen, reduxCatalog]);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -56,9 +68,9 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
     setLoading(true);
     setError('');
     try {
-      const res = await productService.getAllProducts();
-      if (res?.success && Array.isArray(res.data)) {
-        setProducts(res.data);
+      const actionRes = await dispatch(fetchCatalogProducts()).unwrap();
+      if (Array.isArray(actionRes)) {
+        setProducts(actionRes);
       }
     } catch (err) {
       console.error('Failed to load global catalog:', err);
@@ -243,6 +255,16 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
     try {
       const res = await productService.addBranchInventory(payload);
       if (res?.success) {
+        dispatch(
+          updateBranchInventoryStock({
+            branchId: payload.branchId,
+            productId: selectedProduct?._id,
+            quantityAdded: payload.quantity,
+            isSerialized: selectedProduct?.isSerialized,
+            serialNumbers: serials,
+          })
+        );
+        dispatch(invalidateProductCaches());
         onRefresh && onRefresh();
         onClose();
       } else {

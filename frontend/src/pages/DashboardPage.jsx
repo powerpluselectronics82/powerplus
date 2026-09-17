@@ -162,17 +162,18 @@ export const DashboardPage = () => {
   };
 
   const loadDashboardData = (force = false) => {
-    dispatch(fetchStockValuation({ branchId: selectedBranchId, force }));
-    dispatch(fetchLowStockProducts({ branchId: selectedBranchId, force }));
-    dispatch(fetchDailySummary({ branchId: selectedBranchId, force }));
-    if (selectedBranchId) {
-      dispatch(fetchMonthlySales({ branchId: selectedBranchId, month: selectedMonth, force }));
+    const bId = selectedBranchId || currentBranch?._id;
+    dispatch(fetchStockValuation({ branchId: bId, force }));
+    dispatch(fetchLowStockProducts({ branchId: bId, force }));
+    dispatch(fetchDailySummary({ branchId: bId, force }));
+    if (bId) {
+      dispatch(fetchMonthlySales({ branchId: bId, month: selectedMonth, force }));
     }
   };
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedBranchId, selectedMonth, role, dispatch]);
+  }, [selectedBranchId, currentBranch?._id, selectedMonth, role, dispatch]);
 
   const monthSalesList = Array.isArray(monthlySales?.sales) ? monthlySales.sales : [];
   const filteredMonthSales = monthSalesList.filter((s) => {

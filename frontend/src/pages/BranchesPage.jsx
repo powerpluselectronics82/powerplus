@@ -182,7 +182,13 @@ export const BranchesPage = () => {
   const handleToggleStatus = async (branchId) => {
     try {
       const res = await branchService.toggleBranchStatus(branchId);
-      if (res.success) loadBranches();
+      if (res.success) {
+        if (res.data) {
+          dispatch(updateBranchInStore(res.data));
+        } else {
+          loadBranches(true);
+        }
+      }
     } catch (err) {
       alert(err.message);
     }
@@ -220,7 +226,17 @@ export const BranchesPage = () => {
       });
       if (res.success) {
         setAssignModalBranch(null);
-        loadBranches();
+        if (res.data) {
+          dispatch(updateBranchInStore(res.data));
+        } else {
+          dispatch(
+            updateBranchInStore({
+              ...assignModalBranch,
+              managerId: selectedManagerId,
+              managerName: selectedUser ? selectedUser.name : '',
+            })
+          );
+        }
       }
     } catch (err) {
       alert(err.message);

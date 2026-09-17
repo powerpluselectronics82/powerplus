@@ -32,9 +32,10 @@ export const fetchCatalogProducts = createAsyncThunk(
 // 2. Fetch Branch Inventory Products
 export const fetchBranchProducts = createAsyncThunk(
   'products/fetchBranchProducts',
-  async (branchId, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
-      if (!branchId) return [];
+      const branchId = typeof arg === 'object' && arg !== null ? arg.branchId : arg;
+      if (!branchId) return { branchId: null, data: [] };
       const res = await productService.getBranchProducts(branchId);
       return { branchId, data: res?.data || [] };
     } catch (err) {
@@ -43,8 +44,8 @@ export const fetchBranchProducts = createAsyncThunk(
   },
   {
     condition: (arg, { getState }) => {
-      const branchId = typeof arg === 'object' ? arg.branchId : arg;
-      const force = typeof arg === 'object' ? arg.force : false;
+      const branchId = typeof arg === 'object' && arg !== null ? arg.branchId : arg;
+      const force = typeof arg === 'object' && arg !== null ? arg.force : false;
       if (force) return true;
       if (!branchId) return false;
       const { products } = getState();
@@ -60,8 +61,9 @@ export const fetchBranchProducts = createAsyncThunk(
 // 3. Fetch Low Stock Products
 export const fetchLowStockProducts = createAsyncThunk(
   'products/fetchLowStock',
-  async (branchId, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
+      const branchId = typeof arg === 'object' && arg !== null ? arg.branchId : arg;
       const res = await productService.getLowStockProducts(branchId || '');
       return res?.data || [];
     } catch (err) {
@@ -70,7 +72,7 @@ export const fetchLowStockProducts = createAsyncThunk(
   },
   {
     condition: (arg, { getState }) => {
-      const force = typeof arg === 'object' ? arg.force : false;
+      const force = typeof arg === 'object' && arg !== null ? arg.force : false;
       if (force) return true;
       const { products } = getState();
       const isFresh = products.lastLowStockFetched && (Date.now() - products.lastLowStockFetched < CACHE_TTL_MS);
@@ -85,8 +87,9 @@ export const fetchLowStockProducts = createAsyncThunk(
 // 4. Fetch Stock Valuation
 export const fetchStockValuation = createAsyncThunk(
   'products/fetchStockValuation',
-  async (branchId, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
+      const branchId = typeof arg === 'object' && arg !== null ? arg.branchId : arg;
       const res = branchId
         ? await productService.getBranchStockValuation(branchId)
         : await productService.getAllStockValuation();
@@ -97,7 +100,7 @@ export const fetchStockValuation = createAsyncThunk(
   },
   {
     condition: (arg, { getState }) => {
-      const force = typeof arg === 'object' ? arg.force : false;
+      const force = typeof arg === 'object' && arg !== null ? arg.force : false;
       if (force) return true;
       const { products } = getState();
       const isFresh = products.lastValuationFetched && (Date.now() - products.lastValuationFetched < CACHE_TTL_MS);
@@ -202,6 +205,93 @@ const productsSlice = createSlice({
         state.lastCatalogFetched = Date.now();
       }
     },
+    toggleProductStatusInStore: (state, action) => {
+      const productId = String(action.payload);
+      // Toggle in catalog
+      state.catalogProducts = state.catalogProducts.map((p) => {
+        const id = String(p._id || p.id || '');
+        if (id === productId) {
+          const currentStatus = p.status || (p.isActive ? 'ACTIVE' : 'INACTIVE');
+          const nextStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+          return { ...p, status: nextStatus, isActive: nextStatus === 'ACTIVE' };
+        }
+        return p;
+      });
+      // Toggle in branch products
+      state.branchProducts = state.branchProducts.map((p) => {
+        const id = String(p._id || p.productId?._id || p.productId || '');
+        if (id === productId) {
+          const currentStatus = p.status || (p.isActive ? 'ACTIVE' : 'INACTIVE');
+          const nextStatus = currentStatus === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+          return { ...p, status: nextStatus, isActive: nextStatus === 'ACTIVE' };
+        }
+        return p;
+      });
+    },
+    addCategoryToStore: (state, action) => {
+      if (action.payload) {
+        state.categories = [action.payload, ...state.categories];
+      }
+    },
+    updateCategoryInStore: (state, action) => {
+      if (action.payload) {
+        const catId = String(action.payload._id || action.payload.id || '');
+        state.categories = state.categories.map((c) =>
+          String(c._id || c.id || '') === catId ? { ...c, ...action.payload } : c
+        );
+      }
+    },
+    removeCategoryFromStore: (state, action) => {
+      const catId = String(action.payload);
+      state.categories = state.categories.filter((c) => String(c._id || c.id || '') !== catId);
+    },
+    addBrandToStore: (state, action) => {
+      if (action.payload) {
+        state.brands = [action.payload, ...state.brands];
+      }
+    },
+    updateBrandInStore: (state, action) => {
+      if (action.payload) {
+        const brandId = String(action.payload._id || action.payload.id || '');
+        state.brands = state.brands.map((b) =>
+          String(b._id || b.id || '') === brandId ? { ...b, ...action.payload } : b
+        );
+      }
+    },
+    removeBrandFromStore: (state, action) => {
+      const brandId = String(action.payload);
+      state.brands = state.brands.filter((b) => String(b._id || b.id || '') !== brandId);
+    },
+    updateBranchInventoryStock: (state, action) => {
+      const { branchId, productId, quantityAdded = 0, isSerialized, serialNumbers = [] } = action.payload || {};
+      if (!productId) return;
+      const pId = String(productId);
+      state.branchProducts = state.branchProducts.map((p) => {
+        const id = String(p._id || p.productId?._id || p.productId || '');
+        if (id === pId) {
+          const currentStock = Number(p.stock ?? p.availableStock ?? p.Stock ?? p.quantity ?? 0);
+          const nextStock = currentStock + Number(quantityAdded);
+          let units = Array.isArray(p.inventoryUnits) ? [...p.inventoryUnits] : [];
+          if (isSerialized && Array.isArray(serialNumbers) && serialNumbers.length > 0) {
+            const newUnits = serialNumbers.map((s) => ({
+              serialNumber: typeof s === 'object' ? s.serialNumber : s,
+              status: 'available',
+            }));
+            units = [...units, ...newUnits];
+          }
+          return {
+            ...p,
+            stock: nextStock,
+            availableStock: nextStock,
+            quantity: nextStock,
+            inventoryUnits: units,
+          };
+        }
+        return p;
+      });
+      state.lastLowStockFetched = null;
+      state.lastValuationFetched = null;
+    },
   },
   extraReducers: (builder) => {
     // Catalog
@@ -295,5 +385,17 @@ const productsSlice = createSlice({
   },
 });
 
-export const { invalidateProductCaches, optimisticAddCatalogProduct } = productsSlice.actions;
+export const {
+  invalidateProductCaches,
+  optimisticAddCatalogProduct,
+  toggleProductStatusInStore,
+  addCategoryToStore,
+  updateCategoryInStore,
+  removeCategoryFromStore,
+  addBrandToStore,
+  updateBrandInStore,
+  removeBrandFromStore,
+  updateBranchInventoryStock,
+} = productsSlice.actions;
+export const invalidateProductsCache = invalidateProductCaches;
 export default productsSlice.reducer;

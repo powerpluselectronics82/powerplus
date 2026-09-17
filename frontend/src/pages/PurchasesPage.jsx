@@ -23,7 +23,7 @@ import { PurchaseInvoiceModal } from '../components/inventory/PurchaseInvoiceMod
 
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { fetchPurchases, invalidatePurchasesCache } from '../redux/slices/purchasesSlice';
-import { invalidateProductsCache } from '../redux/slices/productsSlice';
+import { invalidateProductCaches } from '../redux/slices/productsSlice';
 
 export const PurchasesPage = () => {
   const dispatch = useAppDispatch();
@@ -360,7 +360,7 @@ export const PurchasesPage = () => {
         onClose={() => setIsModalOpen(false)}
         onSuccess={() => {
           dispatch(invalidatePurchasesCache());
-          dispatch(invalidateProductsCache());
+          dispatch(invalidateProductCaches());
           loadPurchases(true);
         }}
       />

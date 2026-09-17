@@ -6,8 +6,9 @@ const CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
 // 1. Daily Sales Summary
 export const fetchDailySummary = createAsyncThunk(
   'sales/fetchDailySummary',
-  async (branchId, { rejectWithValue }) => {
+  async (arg, { rejectWithValue }) => {
     try {
+      const branchId = typeof arg === 'object' && arg !== null ? arg.branchId : arg;
       const res = await saleService.getDailySummary(branchId || '');
       return { branchId, data: res?.data || null };
     } catch (err) {
@@ -92,6 +93,62 @@ const salesSlice = createSlice({
       state.lastDailyFetched = null;
       state.lastMonthlyFetched = null;
     },
+    recordSaleInDailySummary: (state, action) => {
+      const sale = action.payload;
+      if (!sale) return;
+
+      const saleTotal = Number(sale.grandTotal || sale.totalAmount || 0);
+      const tax = Number(
+        sale.taxableValue !== undefined
+          ? sale.taxableValue
+          : (Number(sale.cgstTotal || 0) + Number(sale.sgstTotal || 0) + Number(sale.igstTotal || 0))
+      );
+
+      let cost = 0;
+      if (Array.isArray(sale.items)) {
+        cost = sale.items.reduce((sum, item) => {
+          const pPrice = Number(item.purchasePrice || 0);
+          const qty = Number(item.unit || item.quantity || 1);
+          return sum + (pPrice * qty);
+        }, 0);
+      }
+
+      if (!state.dailySummary) {
+        state.dailySummary = {
+          totalSale: saleTotal,
+          totalTaxableValue: tax,
+          totalRevenue: Number(sale.subtotal || (saleTotal - tax)),
+          totalCost: cost,
+          totalProfit: saleTotal - (tax + cost),
+        };
+      } else {
+        state.dailySummary = {
+          ...state.dailySummary,
+          totalSale: Number(state.dailySummary.totalSale || 0) + saleTotal,
+          totalTaxableValue: Number(state.dailySummary.totalTaxableValue || 0) + tax,
+          totalRevenue: Number(state.dailySummary.totalRevenue || 0) + Number(sale.subtotal || (saleTotal - tax)),
+          totalCost: Number(state.dailySummary.totalCost || 0) + cost,
+          totalProfit:
+            (Number(state.dailySummary.totalSale || 0) + saleTotal) -
+            ((Number(state.dailySummary.totalTaxableValue || 0) + tax) + (Number(state.dailySummary.totalCost || 0) + cost)),
+        };
+      }
+
+      // Also update monthlySales if present in state
+      if (state.monthlySales) {
+        state.monthlySales = {
+          ...state.monthlySales,
+          totalSalesAmount: Number(state.monthlySales.totalSalesAmount || 0) + saleTotal,
+          saleCount: Number(state.monthlySales.saleCount || 0) + 1,
+          sales: Array.isArray(state.monthlySales.sales)
+            ? [sale, ...state.monthlySales.sales]
+            : [sale],
+        };
+      }
+
+      state.lastDailyFetched = Date.now();
+      state.lastMonthlyFetched = Date.now();
+    },
   },
   extraReducers: (builder) => {
     // Daily Summary
@@ -142,5 +199,5 @@ const salesSlice = createSlice({
   },
 });
 
-export const { invalidateSalesCache } = salesSlice.actions;
+export const { invalidateSalesCache, recordSaleInDailySummary } = salesSlice.actions;
 export default salesSlice.reducer;

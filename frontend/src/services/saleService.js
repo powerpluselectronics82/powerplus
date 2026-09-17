@@ -35,6 +35,10 @@ export const saleService = {
     return await api.get(`/summary/day?${params.toString()}`);
   },
 
+  getDailySummary: async (branchId = '', date = '') => {
+    return await saleService.getSummaryDay(branchId, date);
+  },
+
   getSummaryMonth: async (branchId = '', month = '') => {
     const params = new URLSearchParams();
     if (branchId) params.append('branchId', branchId);

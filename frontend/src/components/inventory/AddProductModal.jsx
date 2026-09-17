@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Package, Tag, Percent, Sliders, ChevronDown, ChevronUp } from 'lucide-react';
 import { productService } from '../../services/productService';
-import { categoryService } from '../../services/categoryService';
-import { brandService } from '../../services/brandService';
+import { useAppDispatch, useAppSelector } from '../../redux/hooks';
+import {
+  optimisticAddCatalogProduct,
+  fetchCategories,
+  fetchBrands,
+} from '../../redux/slices/productsSlice';
 
 export const AddProductModal = ({ isOpen, onClose, onRefresh }) => {
+  const dispatch = useAppDispatch();
+  const { categories: reduxCategories, brands: reduxBrands } = useAppSelector((state) => state.products);
   const [categories, setCategories] = useState([]);
   const [brands, setBrands] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -47,14 +53,19 @@ export const AddProductModal = ({ isOpen, onClose, onRefresh }) => {
 
   useEffect(() => {
     if (isOpen) {
-      Promise.all([categoryService.getCategories(), brandService.getBrands()])
-        .then(([catRes, brandRes]) => {
-          if (catRes?.success && Array.isArray(catRes.data)) setCategories(catRes.data);
-          if (brandRes?.success && Array.isArray(brandRes.data)) setBrands(brandRes.data);
-        })
-        .catch((err) => console.error('Failed to load category/brand master:', err));
+      if (reduxCategories && reduxCategories.length > 0) {
+        setCategories(reduxCategories);
+      } else {
+        dispatch(fetchCategories());
+      }
+
+      if (reduxBrands && reduxBrands.length > 0) {
+        setBrands(reduxBrands);
+      } else {
+        dispatch(fetchBrands());
+      }
     }
-  }, [isOpen]);
+  }, [isOpen, reduxCategories, reduxBrands, dispatch]);
 
   if (!isOpen) return null;
 
@@ -97,6 +108,9 @@ export const AddProductModal = ({ isOpen, onClose, onRefresh }) => {
     try {
       const res = await productService.addProduct(payload);
       if (res?.success) {
+        if (res.data) {
+          dispatch(optimisticAddCatalogProduct(res.data));
+        }
         onRefresh && onRefresh();
         onClose();
       } else {

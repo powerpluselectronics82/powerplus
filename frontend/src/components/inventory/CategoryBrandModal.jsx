@@ -2,12 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus, Tag, Shield, Trash2, Edit2, CheckCircle, Search, Layers, AlertCircle, RefreshCw } from 'lucide-react';
 import { categoryService } from '../../services/categoryService';
 import { brandService } from '../../services/brandService';
+import { useAppDispatch, useAppSelector } from '../../redux/hooks';
+import {
+  fetchCategories,
+  fetchBrands,
+  addCategoryToStore,
+  updateCategoryInStore,
+  removeCategoryFromStore,
+  addBrandToStore,
+  updateBrandInStore,
+  removeBrandFromStore,
+} from '../../redux/slices/productsSlice';
 
 export const CategoryBrandModal = ({ isOpen, onClose, onRefresh }) => {
+  const dispatch = useAppDispatch();
+  const { categories, brands, categoriesLoading, brandsLoading } = useAppSelector(
+    (state) => state.products
+  );
   const [activeTab, setActiveTab] = useState('category'); // 'category' | 'brand'
-  const [categories, setCategories] = useState([]);
-  const [brands, setBrands] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -31,26 +43,9 @@ export const CategoryBrandModal = ({ isOpen, onClose, onRefresh }) => {
     }
   }, [successMsg]);
 
-  const loadData = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const [catRes, brandRes] = await Promise.all([
-        categoryService.getCategories(),
-        brandService.getBrands(),
-      ]);
-
-      if (catRes?.success) setCategories(catRes.data || []);
-      else if (Array.isArray(catRes)) setCategories(catRes);
-
-      if (brandRes?.success) setBrands(brandRes.data || []);
-      else if (Array.isArray(brandRes)) setBrands(brandRes);
-    } catch (err) {
-      console.error('Failed to load categories/brands:', err);
-      setError('Failed to fetch catalog master data');
-    } finally {
-      setLoading(false);
-    }
+  const loadData = (force = false) => {
+    dispatch(fetchCategories({ force }));
+    dispatch(fetchBrands({ force }));
   };
 
   const resetForm = () => {
@@ -75,24 +70,27 @@ export const CategoryBrandModal = ({ isOpen, onClose, onRefresh }) => {
     try {
       if (activeTab === 'category') {
         if (editingId) {
-          await categoryService.updateCategory(editingId, { name: formName, description: formDesc });
+          const res = await categoryService.updateCategory(editingId, { name: formName, description: formDesc });
+          dispatch(updateCategoryInStore(res?.data || { _id: editingId, name: formName, description: formDesc }));
           setSuccessMsg('Category updated successfully');
         } else {
-          await categoryService.createCategory({ name: formName, description: formDesc });
+          const res = await categoryService.createCategory({ name: formName, description: formDesc });
+          dispatch(addCategoryToStore(res?.data || { name: formName, description: formDesc }));
           setSuccessMsg('Category created successfully');
         }
       } else {
         if (editingId) {
-          await brandService.updateBrand(editingId, { name: formName, description: formDesc });
+          const res = await brandService.updateBrand(editingId, { name: formName, description: formDesc });
+          dispatch(updateBrandInStore(res?.data || { _id: editingId, name: formName, description: formDesc }));
           setSuccessMsg('Brand updated successfully');
         } else {
-          await brandService.createBrand({ name: formName, description: formDesc });
+          const res = await brandService.createBrand({ name: formName, description: formDesc });
+          dispatch(addBrandToStore(res?.data || { name: formName, description: formDesc }));
           setSuccessMsg('Brand created successfully');
         }
       }
 
       resetForm();
-      await loadData();
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Save error:', err);
@@ -114,12 +112,13 @@ export const CategoryBrandModal = ({ isOpen, onClose, onRefresh }) => {
     try {
       if (activeTab === 'category') {
         await categoryService.deleteCategory(id);
+        dispatch(removeCategoryFromStore(id));
         setSuccessMsg('Category deleted successfully');
       } else {
         await brandService.deleteBrand(id);
+        dispatch(removeBrandFromStore(id));
         setSuccessMsg('Brand deleted successfully');
       }
-      await loadData();
       if (onRefresh) onRefresh();
     } catch (err) {
       console.error('Delete error:', err);
