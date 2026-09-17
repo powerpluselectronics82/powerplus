@@ -11,9 +11,6 @@ const addCompany = async (req, res) => {
       email,
       phone,
       address,
-      invoicePrefix,
-      invoiceNextNumber,
-      taxConfig,
     } = req.body;
 
     // Required fields
@@ -44,10 +41,7 @@ const addCompany = async (req, res) => {
       pan,
       email,
       phone,
-      address,
-      invoicePrefix,
-      invoiceNextNumber,
-      taxConfig,
+      address: typeof address === "string" ? address.trim() : "",
     });
 
     // Cache company in Redis

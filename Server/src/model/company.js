@@ -40,41 +40,8 @@ const companySchema = new mongoose.Schema(
     },
 
     address: {
-      street: {
-        type: String,
-      },
-      city: {
-        type: String,
-      },
-      state: {
-        type: String,
-      },
-      zipCode: {
-        type: String,
-      },
-      country: {
-        type: String,
-      },
-    },
-
-    invoicePrefix: {
       type: String,
-    },
-
-    invoiceNextNumber: {
-      type: Number,
-    },
-
-    taxConfig: {
-      defaultCgstRate: {
-        type: Number,
-      },
-      defaultSgstRate: {
-        type: Number,
-      },
-      defaultIgstRate: {
-        type: Number,
-      },
+      default: "",
     },
   },
   {
