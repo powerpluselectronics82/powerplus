@@ -173,7 +173,7 @@ export const AnalyticsPage = () => {
               ₹{Number(summaryData.totalProfit || 0).toLocaleString('en-IN')}
             </div>
             <p className="text-xs text-emerald-700 mt-1 font-medium">
-              Revenue minus purchase cost
+              Gross sales minus (tax + COGS)
             </p>
           </div>
         </div>

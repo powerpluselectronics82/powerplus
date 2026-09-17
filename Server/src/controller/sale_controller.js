@@ -63,6 +63,11 @@ const invalidateSaleCaches = async (companyId, branchId, cashierId) => {
 
     const warrantyKeys = await redis.keys(`sales:warranty:company:${companyId}:*`);
     keys.push(...warrantyKeys);
+
+    const summaryKeys = await redis.keys(`sales:summary:*:company:${companyId}:*`);
+    keys.push(...summaryKeys);
+    const summaryV1Keys = await redis.keys(`sales:summary:company:${companyId}:*`);
+    keys.push(...summaryV1Keys);
   } catch (err) {
     console.error("Redis sales cache key error:", err.message);
   }
@@ -299,6 +304,12 @@ const createSale = async (req, res) => {
       sgstTotal += sgstAmount;
       igstTotal += igstAmount;
 
+      const itemPurchasePrice = Number(
+        inventoryUnit?.purchasePrice ||
+        inventory?.purchasePrice ||
+        0
+      );
+
       saleItems.push({
         productId: product._id,
         productName: product.name,
@@ -311,6 +322,7 @@ const createSale = async (req, res) => {
         tollFreeNumber: item.tollFreeNumber || product.specifications?.tollFreeNumber || product.tollFreeNumber || topTollFree || "",
         unit: saleQuantity,
         serialNumber,
+        purchasePrice: itemPurchasePrice,
         sellingPrice,
         mrp,
         discount,
@@ -659,12 +671,12 @@ const getCompanySummary = async (req, res, type) => {
     const { start, end } = buildRange(type, value);
     const periodKey = formatPeriodKey(type, value);
 
-    const cacheKey = `sales:summary:company:${companyId}:branch:${branchId || "all"}:period:${type}:${periodKey}`;
+    const cacheKey = `sales:summary:v3:company:${companyId}:branch:${branchId || "all"}:period:${type}:${periodKey}`;
     const cached = await getCached(cacheKey);
     if (cached) return res.status(200).json({ success: true, data: cached });
 
     const match = { companyId: toObjectId(companyId), createdAt: { $gte: start, $lt: end } };
-    if (branchId) match.branchId = toObjectId(branchId);
+    if (branchId && mongoose.isValidObjectId(branchId)) match.branchId = toObjectId(branchId);
 
     const pipeline = [
       { $match: match },
@@ -682,33 +694,85 @@ const getCompanySummary = async (req, res, type) => {
           items: [
             { $unwind: "$items" },
             {
-              $group: {
-                _id: "$items.productId",
-                totalUnits: { $sum: "$items.unit" },
-                totalRevenue: { $sum: { $multiply: ["$items.sellingPrice", "$items.unit"] } },
+              $lookup: {
+                from: "branchinventories",
+                let: {
+                  pId: "$items.productId",
+                  bId: "$branchId",
+                  cId: "$companyId",
+                  mrpVal: "$items.mrp",
+                },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$companyId", "$$cId"] },
+                          { $eq: ["$productId", "$$pId"] },
+                          {
+                            $or: [
+                              { $eq: ["$branchId", "$$bId"] },
+                              { $eq: ["$mrp", "$$mrpVal"] },
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  { $sort: { purchasePrice: -1 } },
+                  { $limit: 1 },
+                ],
+                as: "invLookup",
               },
             },
             {
               $lookup: {
-                from: "products",
-                localField: "_id",
-                foreignField: "_id",
-                as: "product",
+                from: "inventorytransactions",
+                let: {
+                  pId: "$items.productId",
+                  cId: "$companyId",
+                },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$companyId", "$$cId"] },
+                          { $eq: ["$productId", "$$pId"] },
+                        ],
+                      },
+                    },
+                  },
+                  { $sort: { createdAt: -1 } },
+                  { $limit: 1 },
+                ],
+                as: "txLookup",
               },
             },
-            { $unwind: { path: "$product", preserveNullAndEmptyArrays: true } },
             {
-              $project: {
-                totalUnits: 1,
-                totalRevenue: 1,
-                purchasePrice: { $ifNull: ["$product.purchasePrice", 0] },
+              $addFields: {
+                unitCost: {
+                  $cond: [
+                    { $gt: [{ $ifNull: ["$items.purchasePrice", 0] }, 0] },
+                    "$items.purchasePrice",
+                    {
+                      $cond: [
+                        { $gt: [{ $ifNull: [{ $arrayElemAt: ["$invLookup.purchasePrice", 0] }, 0] }, 0] },
+                        { $arrayElemAt: ["$invLookup.purchasePrice", 0] },
+                        { $ifNull: [{ $arrayElemAt: ["$txLookup.purchasePrice", 0] }, 0] },
+                      ],
+                    },
+                  ],
+                },
+                soldQty: { $ifNull: ["$items.unit", 1] },
+                itemSellingPrice: { $ifNull: ["$items.sellingPrice", 0] },
               },
             },
             {
               $group: {
                 _id: null,
-                totalRevenue: { $sum: "$totalRevenue" },
-                totalCost: { $sum: { $multiply: ["$purchasePrice", "$totalUnits"] } },
+                totalRevenue: { $sum: { $multiply: ["$itemSellingPrice", "$soldQty"] } },
+                totalCost: { $sum: { $multiply: ["$unitCost", "$soldQty"] } },
               },
             },
           ],
@@ -724,7 +788,12 @@ const getCompanySummary = async (req, res, type) => {
       },
       {
         $addFields: {
-          totalProfit: { $subtract: ["$totalRevenue", "$totalCost"] },
+          totalProfit: {
+            $subtract: [
+              "$totalSale",
+              { $add: ["$totalTaxableValue", "$totalCost"] },
+            ],
+          },
         },
       },
     ];

@@ -100,6 +100,11 @@ const SaleSchema = new mongoose.Schema(
           type: Number,
           required: true,
         },
+        purchasePrice: {
+          type: Number,
+          default: 0,
+          min: 0,
+        },
 
         mrp: {
           type: Number,
