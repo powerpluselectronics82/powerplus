@@ -288,7 +288,7 @@ const verifyPhone = async (req, res) => {
     });
   }
 };
- 
+
 
 //resend phone otp function
 
@@ -559,11 +559,11 @@ const toggleUserStatus = async (req, res) => {
 
     // const actingUser = req.user; // from auth middleware
 
-     const user = await User.findById(userId);
+    const user = await User.findById(userId);
 
-     if (!user) {
-       return res.status(404).json({ success: false, message: "User not found" });
-     }
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
 
     // // Only OWNER may toggle user status
     // if (actingUser.role !== "OWNER") {

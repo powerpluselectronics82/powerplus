@@ -418,7 +418,6 @@ export const StaffPage = () => {
                     <option value="BRANCH_MANAGER">BRANCH_MANAGER</option>
                     <option value="CASHIER">CASHIER</option>
                     <option value="INVENTORY_STAFF">INVENTORY_STAFF</option>
-                    <option value="OWNER">OWNER</option>
                   </select>
                 </div>
 
