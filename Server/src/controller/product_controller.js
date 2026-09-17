@@ -114,6 +114,13 @@ const addProduct = async (req, res) => {
       details: { barcode: product.barcode, name: product.name, specifications: product.specifications },
     });
 
+    // Invalidate product catalog cache so newly created product is immediately visible
+    try {
+      await redis.del(getProductsListKey(companyId));
+    } catch (redisErr) {
+      console.error("Redis cache invalidate error:", redisErr.message);
+    }
+
     return res.status(201).json({ success: true, message: "Product created successfully", data: product });
   } catch (error) {
     console.error("Add product error:", error);

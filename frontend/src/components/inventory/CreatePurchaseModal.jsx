@@ -168,9 +168,13 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
       </div>
 
       {isOpen && (
-        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl max-h-60 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+        <div className="absolute z-50 left-0 right-0 mt-1.5 bg-white rounded-2xl border border-slate-200 shadow-2xl max-h-72 overflow-y-auto divide-y divide-slate-100 animate-in fade-in zoom-in-95 duration-100">
+          <div className="sticky top-0 z-10 px-3 py-1.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between text-[10px] font-extrabold text-slate-600">
+            <span>Catalog Products ({filteredProducts.length})</span>
+            <span className="text-indigo-600">{searchTerm ? `Filtering "${searchTerm}"` : 'All Created Products'}</span>
+          </div>
           {filteredProducts.length === 0 ? (
-            <div className="p-3.5 text-center text-slate-400 font-semibold text-xs">
+            <div className="p-4 text-center text-slate-400 font-medium text-xs">
               No products found matching "{searchTerm}"
             </div>
           ) : (
@@ -297,24 +301,48 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
     setLoading(true);
     setError('');
     try {
-      const [supRes, prodRes] = await Promise.all([
+      // 1. Fetch suppliers
+      // 2. Fetch ALL master catalog products created in the Product section
+      // 3. Optionally fetch branch products to attach any existing branch pricing/MRP
+      const [supRes, allProdRes, branchProdRes] = await Promise.all([
         supplierService.getAllSuppliers(),
+        productService.getAllProducts(),
         selectedBranchId
           ? productService.getBranchProducts(selectedBranchId)
-          : productService.getAllProducts(),
+          : Promise.resolve({ success: false, data: [] }),
       ]);
 
       if (supRes?.success) {
         setSuppliers(supRes.data || []);
       }
-      if (prodRes?.success) {
-        const rawList = (prodRes.data || []).map((p) => (p.productId ? p.productId : p));
-        // Deduplicate products by barcode: if one barcode has multiple records, show it only one time!
-        const uniqueProducts = [];
-        const seenBarcodes = new Set();
-        const seenIds = new Set();
 
-        for (const p of rawList) {
+      // Map branch pricing by product ID and barcode if available
+      const branchPriceMap = new Map();
+      if (branchProdRes?.success && Array.isArray(branchProdRes.data)) {
+        for (const bp of branchProdRes.data) {
+          const pId = bp.productId?._id
+            ? String(bp.productId._id)
+            : bp.productId
+            ? String(bp.productId)
+            : null;
+          const bCode = bp.productId?.barcode || bp.barcode;
+          const info = {
+            mrp: bp.mrp || 0,
+            sellingPrice: bp.sellingPrice || 0,
+            purchasePrice: bp.purchasePrice || 0,
+          };
+          if (pId) branchPriceMap.set(pId, info);
+          if (bCode) branchPriceMap.set(String(bCode).trim().toLowerCase(), info);
+        }
+      }
+
+      const uniqueProducts = [];
+      const seenBarcodes = new Set();
+      const seenIds = new Set();
+
+      // Prioritize ALL products created in the Product Section (Master Catalog)
+      if (allProdRes?.success && Array.isArray(allProdRes.data)) {
+        for (const p of allProdRes.data) {
           if (!p) continue;
           const barcode = p.barcode ? String(p.barcode).trim().toLowerCase() : null;
           const id = p._id ? String(p._id) : null;
@@ -326,10 +354,47 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
             if (seenIds.has(id)) continue;
             seenIds.add(id);
           }
-          uniqueProducts.push(p);
+
+          const branchPricing =
+            (id && branchPriceMap.get(id)) ||
+            (barcode && branchPriceMap.get(barcode)) ||
+            {};
+
+          uniqueProducts.push({
+            ...p,
+            mrp: branchPricing.mrp || p.mrp || 0,
+            purchasePrice: branchPricing.purchasePrice || p.purchasePrice || '',
+          });
         }
-        setProducts(uniqueProducts);
       }
+
+      // Also include any branch inventory items that might not be in the allProdRes list
+      if (branchProdRes?.success && Array.isArray(branchProdRes.data)) {
+        for (const bp of branchProdRes.data) {
+          const itemProd =
+            bp.productId && typeof bp.productId === 'object' ? bp.productId : bp;
+          if (!itemProd) continue;
+
+          const barcode = itemProd.barcode
+            ? String(itemProd.barcode).trim().toLowerCase()
+            : null;
+          const id = itemProd._id ? String(itemProd._id) : null;
+
+          if (barcode && seenBarcodes.has(barcode)) continue;
+          if (id && seenIds.has(id)) continue;
+
+          if (barcode) seenBarcodes.add(barcode);
+          if (id) seenIds.add(id);
+
+          uniqueProducts.push({
+            ...itemProd,
+            mrp: bp.mrp || itemProd.mrp || 0,
+            purchasePrice: bp.purchasePrice || itemProd.purchasePrice || '',
+          });
+        }
+      }
+
+      setProducts(uniqueProducts);
     } catch (err) {
       console.error('Failed to load purchase modal data:', err);
       setError('Failed to load suppliers or product catalog');
@@ -360,7 +425,10 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
       category: product.category || '',
       brand: product.brand || '',
       isSerialized: product.isSerialized || false,
-      purchasePrice: updated[index].purchasePrice !== '' ? updated[index].purchasePrice : '',
+      purchasePrice:
+        updated[index].purchasePrice !== ''
+          ? updated[index].purchasePrice
+          : product.purchasePrice || '',
       mrp: product.mrp || 0,
       cgstRate: product.cgstRate !== undefined ? product.cgstRate : 9,
       sgstRate: product.sgstRate !== undefined ? product.sgstRate : 9,
