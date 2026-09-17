@@ -160,22 +160,20 @@ export const StaffPage = () => {
         <div className="flex bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
           <button
             onClick={() => setViewMode('ALL')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              viewMode === 'ALL'
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'ALL'
                 ? 'bg-white text-indigo-600 shadow-sm'
                 : 'text-slate-500 hover:text-slate-900'
-            }`}
+              }`}
           >
             All Company Users ({users.length})
           </button>
           {selectedBranchId && (
             <button
               onClick={() => setViewMode('BRANCH')}
-              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                viewMode === 'BRANCH'
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${viewMode === 'BRANCH'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-slate-500 hover:text-slate-900'
-              }`}
+                }`}
             >
               Current Branch ({currentBranch?.code || 'Branch'})
             </button>
@@ -229,13 +227,12 @@ export const StaffPage = () => {
                     <td className="text-xs text-slate-600 max-w-xs truncate" title={formatAddress(u.address)}>{formatAddress(u.address) || '—'}</td>
                     <td>
                       <span
-                        className={`badge ${
-                          u.role === 'OWNER'
+                        className={`badge ${u.role === 'OWNER'
                             ? 'badge-indigo'
                             : u.role === 'BRANCH_MANAGER'
-                            ? 'badge-emerald'
-                            : 'badge-amber'
-                        }`}
+                              ? 'badge-emerald'
+                              : 'badge-amber'
+                          }`}
                       >
                         {u.role}
                       </span>
@@ -248,9 +245,8 @@ export const StaffPage = () => {
                     </td>
                     <td>
                       <span
-                        className={`badge ${
-                          u.status === 'ACTIVE' ? 'badge-emerald' : 'badge-rose'
-                        }`}
+                        className={`badge ${u.status === 'ACTIVE' ? 'badge-emerald' : 'badge-rose'
+                          }`}
                       >
                         {u.status || 'PENDING'}
                       </span>

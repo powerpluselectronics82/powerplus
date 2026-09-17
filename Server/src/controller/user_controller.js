@@ -167,6 +167,16 @@ const register = async (req, res) => {
     //   });
     // }
 
+    // Invalidate users cache so newly registered staff appears immediately
+    try {
+      await redis.del(`users:company:${user.companyId?.toString() || user.companyId}`);
+      if (user.branchId) {
+        await redis.del(`users:branch:${user.companyId?.toString() || user.companyId}:${user.branchId.toString()}`);
+      }
+    } catch (redisError) {
+      console.error("Redis cache error on user registration:", redisError.message);
+    }
+
     // -------------------------
     // 8. Response
     // -------------------------
@@ -175,6 +185,7 @@ const register = async (req, res) => {
       success: true,
       message: "Registration successful. OTP sent to phone.",
       data: {
+        _id: user._id,
         userId: user._id,
         name: user.name,
         email: user.email,
@@ -269,6 +280,16 @@ const verifyPhone = async (req, res) => {
       resourceId: user._id,
       details: { phoneVerified: user.phoneVerified, status: user.status },
     });
+
+    // Invalidate users cache so phone verified / active status reflects immediately
+    try {
+      await redis.del(`users:company:${user.companyId?.toString() || user.companyId}`);
+      if (user.branchId) {
+        await redis.del(`users:branch:${user.companyId?.toString() || user.companyId}:${user.branchId.toString()}`);
+      }
+    } catch (redisError) {
+      console.error("Redis cache error on user verifyPhone:", redisError.message);
+    }
 
     return res.status(200).json({
       success: true,
