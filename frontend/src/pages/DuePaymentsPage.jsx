@@ -30,6 +30,7 @@ export const DuePaymentsPage = () => {
   const [meta, setMeta] = useState({ totalDueAmount: 0, totalCount: 0, totalPages: 1, currentPage: 1 });
 
   // Filter States
+  const [filterBranchId, setFilterBranchId] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState(''); // '' (all), 'PARTIAL', 'UNPAID'
   const [page, setPage] = useState(1);
@@ -45,7 +46,7 @@ export const DuePaymentsPage = () => {
     setLoading(true);
     setError('');
     try {
-      const branchParam = isOwner ? selectedBranchId : (user?.branchId || '');
+      const branchParam = isOwner ? filterBranchId : (user?.branchId || '');
       const res = await paymentService.getDueSales({
         branchId: branchParam,
         search: searchQuery.trim(),
@@ -63,7 +64,7 @@ export const DuePaymentsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [isOwner, selectedBranchId, user?.branchId, searchQuery, statusFilter, page]);
+  }, [isOwner, filterBranchId, user?.branchId, searchQuery, statusFilter, page]);
 
   useEffect(() => {
     fetchDueSales();
@@ -98,9 +99,9 @@ export const DuePaymentsPage = () => {
             <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm text-xs">
               <Building2 className="w-4 h-4 text-slate-400" />
               <select
-                value={selectedBranchId}
+                value={filterBranchId}
                 onChange={(e) => {
-                  setSelectedBranchId(e.target.value);
+                  setFilterBranchId(e.target.value);
                   setPage(1);
                 }}
                 className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
@@ -246,13 +247,14 @@ export const DuePaymentsPage = () => {
             <span className="text-xs font-semibold">Loading due receivables...</span>
           </div>
         ) : dueSales.length === 0 ? (
-          <div className="py-20 text-center space-y-2">
-            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 mx-auto flex items-center justify-center">
-              <Receipt className="w-6 h-6" />
+          <div className="py-16 text-center space-y-3">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 mx-auto flex items-center justify-center shadow-sm">
+              <Receipt className="w-7 h-7" />
             </div>
-            <h4 className="text-sm font-bold text-slate-800">No Outstanding Due Payments</h4>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              All matching customer invoices are fully settled. Excellent job!
+            <h4 className="text-base font-extrabold text-slate-800">No Outstanding Due Payments</h4>
+            <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+              There are currently no customer invoices with unpaid balances.
+              When a sale is completed in the POS with a partial or unpaid amount, it will automatically appear here with a <strong>Pay Due</strong> button to collect installments.
             </p>
           </div>
         ) : (

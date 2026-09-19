@@ -241,7 +241,11 @@ const getPaymentHistoryBySale = async (req, res) => {
  */
 const getDueSales = async (req, res) => {
   try {
-    const companyId = req.user?.companyId;
+    const rawCompanyId = req.user?.companyId;
+    const compObjectId = mongoose.isValidObjectId(rawCompanyId)
+      ? new mongoose.Types.ObjectId(rawCompanyId)
+      : rawCompanyId;
+
     const {
       branchId,
       search = "",
@@ -254,63 +258,97 @@ const getDueSales = async (req, res) => {
     const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
+    // Filter that matches ANY sale where money is still due:
+    // 1) dueAmount > 0
+    // OR
+    // 2) paymentStatus is 'PARTIAL', 'UNPAID', or 'DUE'
+    // AND paymentStatus is NOT 'PAID'
     const filter = {
-      companyId,
-      dueAmount: { $gt: 0 },
+      $and: [
+        compObjectId ? { companyId: { $in: [compObjectId, String(compObjectId)] } } : {},
+        {
+          $or: [
+            { dueAmount: { $gt: 0 } },
+            { paymentStatus: { $in: ["PARTIAL", "UNPAID", "DUE"] } },
+          ],
+        },
+        { paymentStatus: { $ne: "PAID" } },
+      ],
     };
 
-    // Branch filter
-    if (req.user?.role !== "OWNER") {
-      filter.branchId = req.user?.branchId;
-    } else if (branchId && mongoose.isValidObjectId(branchId)) {
-      filter.branchId = branchId;
+    // Role-based or selected branch filter
+    const targetBranchId = req.user?.role !== "OWNER" ? req.user?.branchId : branchId;
+    if (targetBranchId && mongoose.isValidObjectId(targetBranchId)) {
+      const brObjectId = new mongoose.Types.ObjectId(targetBranchId);
+      filter.$and.push({ branchId: { $in: [brObjectId, String(targetBranchId)] } });
     }
 
     // Status filter
-    if (status && ["PARTIAL", "UNPAID"].includes(status.toUpperCase())) {
-      filter.paymentStatus = status.toUpperCase();
-    } else {
-      filter.paymentStatus = { $in: ["PARTIAL", "UNPAID", "DUE"] };
+    if (status && ["PARTIAL", "UNPAID", "DUE"].includes(status.toUpperCase())) {
+      filter.$and.push({ paymentStatus: status.toUpperCase() });
     }
 
     // Search by customer name, phone, or invoice number
     if (search.trim()) {
       const searchRegex = new RegExp(search.trim(), "i");
-      filter.$or = [
-        { invoiceNumber: searchRegex },
-        { customerName: searchRegex },
-        { customerPhone: searchRegex },
-      ];
+      filter.$and.push({
+        $or: [
+          { invoiceNumber: searchRegex },
+          { customerName: searchRegex },
+          { customerPhone: searchRegex },
+        ],
+      });
     }
 
-    // Aggregate total due amount across matching filter
-    const totalDueAgg = await Sale.aggregate([
-      { $match: filter },
-      {
-        $group: {
-          _id: null,
-          totalDue: { $sum: "$dueAmount" },
-          totalCount: { $sum: 1 },
-        },
-      },
+    const [totalCount, sales] = await Promise.all([
+      Sale.countDocuments(filter),
+      Sale.find(filter)
+        .populate("branchId", "name code")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
     ]);
 
-    const totalDueAmount = totalDueAgg[0]?.totalDue || 0;
-    const totalCount = totalDueAgg[0]?.totalCount || 0;
-    const totalPages = Math.ceil(totalCount / limitNum);
+    // Compute normalized amounts for every sale
+    const normalizedSales = sales.map((s) => {
+      const grandTotal = Number(s.grandTotal || 0);
+      const paidAmount = typeof s.paidAmount === "number" ? s.paidAmount : (s.paymentStatus === "PAID" ? grandTotal : 0);
+      const dueAmount = typeof s.dueAmount === "number" && s.dueAmount > 0
+        ? s.dueAmount
+        : Math.max(0, Number((grandTotal - paidAmount).toFixed(2)));
+      const paymentStatus = s.paymentStatus && s.paymentStatus !== "PAID"
+        ? s.paymentStatus
+        : (dueAmount <= 0 ? "PAID" : (paidAmount > 0 ? "PARTIAL" : "UNPAID"));
 
-    const sales = await Sale.find(filter)
-      .populate("branchId", "name code")
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
+      return {
+        ...s,
+        grandTotal,
+        paidAmount,
+        dueAmount,
+        paymentStatus,
+      };
+    });
+
+    // Calculate total due across all matching sales in DB
+    const allMatching = await Sale.find(filter).select("grandTotal paidAmount dueAmount paymentStatus").lean();
+    let totalDueSum = 0;
+    for (const s of allMatching) {
+      const grand = Number(s.grandTotal || 0);
+      const paid = typeof s.paidAmount === "number" ? s.paidAmount : (s.paymentStatus === "PAID" ? grand : 0);
+      const due = typeof s.dueAmount === "number" && s.dueAmount > 0
+        ? s.dueAmount
+        : Math.max(0, Number((grand - paid).toFixed(2)));
+      totalDueSum += due;
+    }
+
+    const totalPages = Math.ceil(totalCount / limitNum) || 1;
 
     return res.status(200).json({
       success: true,
-      data: sales,
+      data: normalizedSales,
       meta: {
-        totalDueAmount: Number(totalDueAmount.toFixed(2)),
+        totalDueAmount: Number(totalDueSum.toFixed(2)),
         totalCount,
         totalPages,
         currentPage: pageNum,
