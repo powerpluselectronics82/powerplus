@@ -460,6 +460,8 @@ const createSale = async (req, res) => {
           : new mongoose.Types.ObjectId()));
     const validCashierName = cashierName || req.user?.name || req.user?.role || "Cashier";
 
+    const createOpts = sessionOpt ? { session: sessionOpt } : {};
+
     const sale = await Sale.create(
       [
         {
