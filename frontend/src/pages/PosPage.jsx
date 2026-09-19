@@ -39,6 +39,7 @@ import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import { fetchBranchProducts, invalidateProductCaches } from '../redux/slices/productsSlice';
 import { invalidateSalesCache, recordSaleInDailySummary } from '../redux/slices/salesSlice';
 import { invalidateAnalyticsCache } from '../redux/slices/analyticsSlice';
+import { invalidateDueSalesCache } from '../redux/slices/paymentsSlice';
 
 export const PosPage = () => {
   const dispatch = useAppDispatch();
@@ -332,6 +333,7 @@ export const PosPage = () => {
         dispatch(recordSaleInDailySummary(res.data));
         dispatch(invalidateProductCaches());
         dispatch(invalidateAnalyticsCache());
+        dispatch(invalidateDueSalesCache());
         loadProducts(true); // refresh available stock
       }
     } catch (err) {

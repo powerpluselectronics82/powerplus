@@ -14,17 +14,27 @@ import {
 } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
 import { useAuth } from '../context/AuthContext';
+import { useAppDispatch, useAppSelector } from '../redux/hooks';
+import {
+  fetchDueSales,
+  invalidateDueSalesCache,
+  updateSaleDueRecord,
+} from '../redux/slices/paymentsSlice';
 import { ReceivePaymentModal } from '../components/pos/ReceivePaymentModal';
 import { PaymentHistoryModal } from '../components/pos/PaymentHistoryModal';
 import { TaxInvoiceModal } from '../components/pos/TaxInvoiceModal';
 
 export const DuePaymentsPage = () => {
   const { user, role } = useAuth();
+  const dispatch = useAppDispatch();
 
-  const [dueSales, setDueSales] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [meta, setMeta] = useState({ totalDueAmount: 0, totalCount: 0, totalPages: 1, currentPage: 1 });
+  // Redux Global Cached State
+  const {
+    dueSales,
+    meta,
+    loading,
+    error,
+  } = useAppSelector((state) => state.payments);
 
   // Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -36,35 +46,31 @@ export const DuePaymentsPage = () => {
   const [selectedSaleForHistory, setSelectedSaleForHistory] = useState(null);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState(null);
 
-  const fetchDueSales = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await paymentService.getDueSales({
-        search: searchQuery.trim(),
-        status: statusFilter,
-        page,
-        limit: 20,
-      });
-
-      if (res.success) {
-        setDueSales(res.data || []);
-        if (res.meta) setMeta(res.meta);
-      }
-    } catch (err) {
-      setError(err.message || 'Failed to fetch due sales');
-    } finally {
-      setLoading(false);
-    }
-  }, [searchQuery, statusFilter, page]);
+  const loadData = useCallback(
+    (force = false) => {
+      dispatch(
+        fetchDueSales({
+          search: searchQuery.trim(),
+          status: statusFilter,
+          page,
+          limit: 20,
+          force,
+        })
+      );
+    },
+    [dispatch, searchQuery, statusFilter, page]
+  );
 
   useEffect(() => {
-    fetchDueSales();
-  }, [fetchDueSales]);
+    loadData();
+  }, [loadData]);
 
   // Handle successful installment payment
-  const handlePaymentSuccess = () => {
-    fetchDueSales();
+  const handlePaymentSuccess = (updatedSale) => {
+    if (updatedSale?._id) {
+      dispatch(updateSaleDueRecord(updatedSale));
+    }
+    loadData(true);
   };
 
   // Metrics breakdown
@@ -87,7 +93,7 @@ export const DuePaymentsPage = () => {
 
         <div className="flex items-center gap-3">
           <button
-            onClick={() => fetchDueSales()}
+            onClick={() => loadData(true)}
             disabled={loading}
             className="p-2 rounded-xl bg-white border border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-slate-50 shadow-sm transition-all"
             title="Refresh Data"
