@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
 import { useAuth } from '../context/AuthContext';
+import { useBranch } from '../context/BranchContext';
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
 import {
   fetchDueSales,
@@ -26,6 +27,7 @@ import { TaxInvoiceModal } from '../components/pos/TaxInvoiceModal';
 
 export const DuePaymentsPage = () => {
   const { user, role } = useAuth();
+  const { currentBranch } = useBranch();
   const dispatch = useAppDispatch();
 
   // Redux Global Cached State
@@ -400,7 +402,7 @@ export const DuePaymentsPage = () => {
           sale={selectedSaleForInvoice}
           isOpen={Boolean(selectedSaleForInvoice)}
           onClose={() => setSelectedSaleForInvoice(null)}
-          branch={currentBranch}
+          branch={selectedSaleForInvoice?.branchId || currentBranch}
         />
       )}
     </div>
