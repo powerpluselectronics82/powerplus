@@ -14,6 +14,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { paymentService } from '../services/paymentService';
+import { branchService } from '../services/branchService';
 import { useBranch } from '../context/BranchContext';
 import { useAuth } from '../context/AuthContext';
 import { ReceivePaymentModal } from '../components/pos/ReceivePaymentModal';
