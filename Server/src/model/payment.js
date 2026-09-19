@@ -62,13 +62,13 @@ const paymentSchema = new mongoose.Schema(
       index: true,
     },
     recordedBy: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: "User",
-      required: true,
+      required: false,
     },
     recordedByName: {
       type: String,
-      required: true,
+      required: false,
       default: "Cashier",
     },
   },

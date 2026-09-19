@@ -43,14 +43,14 @@ export const AuthProvider = ({ children }) => {
 
   const loginAsDemo = (role = 'OWNER') => {
     const demoUser = {
-      userId: 'demo_user_123',
+      userId: '66a69ca529a87e246bb9eebd',
       _id: '66a69ca529a87e246bb9eebd',
       name: `Demo ${role.replace('_', ' ')}`,
       email: `${role.toLowerCase()}@inventryx.com`,
       phone: '+919876543210',
       role: role,
-      companyId: '66a69ca529a87e246bb9eebd1',
-      branchId: '66a69ca529a87e246bb9eebd2',
+      companyId: '66a69ca529a87e246bb9eebd',
+      branchId: '66a69ca529a87e246bb9eebe',
       phoneVerified: true,
       status: 'ACTIVE',
     };

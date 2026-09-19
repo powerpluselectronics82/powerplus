@@ -289,9 +289,21 @@ export const PosPage = () => {
     const calculatedDue = Math.max(0, Number((totals.grandTotal - sanitizedPaid).toFixed(2)));
     const calculatedStatus = calculatedDue <= 0 ? 'PAID' : (sanitizedPaid > 0 ? 'PARTIAL' : 'UNPAID');
 
+    const resolvedCompanyId =
+      (companyId && typeof companyId === 'object' ? companyId._id : companyId) ||
+      (user?.companyId && typeof user?.companyId === 'object' ? user?.companyId._id : user?.companyId);
+    const resolvedBranchId =
+      (activeBranchId && typeof activeBranchId === 'object' ? activeBranchId._id : activeBranchId) ||
+      (selectedBranchId && typeof selectedBranchId === 'object' ? selectedBranchId._id : selectedBranchId) ||
+      currentBranch?._id ||
+      user?.branchId;
+    const resolvedCashierId =
+      (user?.userId && typeof user.userId === 'object' ? user.userId._id : user?.userId) ||
+      (user?._id && typeof user._id === 'object' ? user._id._id : user?._id);
+
     const payload = {
-      companyId: companyId || user?.companyId,
-      branchId: activeBranchId,
+      companyId: resolvedCompanyId,
+      branchId: resolvedBranchId,
       customerName: customerName || 'Walk-in Customer',
       customerPhone: customerPhone || '9999999999',
       customerAddress: customerAddress || '',
@@ -306,7 +318,7 @@ export const PosPage = () => {
         serialNumber: item.product.isSerialized ? (item.serialNumber || '') : '',
       })),
       paymentMethod,
-      cashierId: user?.userId || user?._id,
+      cashierId: resolvedCashierId,
       cashierName: user?.name || 'Cashier',
     };
 
@@ -727,6 +739,16 @@ export const PosPage = () => {
                 <span className="text-indigo-600">₹{totals.grandTotal.toFixed(2)}</span>
               </div>
             </div>
+
+            {error && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs font-semibold flex items-start gap-2 shadow-sm animate-pulse">
+                <AlertCircle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-bold">Checkout Failed</div>
+                  <div className="text-[11px] font-normal mt-0.5">{error}</div>
+                </div>
+              </div>
+            )}
 
             {/* Complete Checkout Button */}
             <button

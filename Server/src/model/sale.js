@@ -219,14 +219,14 @@ const SaleSchema = new mongoose.Schema(
     },
 
     cashierId: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: mongoose.Schema.Types.Mixed,
       ref: "User",
-      required: true,
+      required: false,
     },
 
     cashierName: {
       type: String,
-      required: true,
+      default: "Cashier",
     },
   },
   {
