@@ -7,6 +7,7 @@ const Branch = require("../model/branch");
 const BranchInventory = require("../model/BranchInventory");
 const InventoryUnit = require("../model/inventryUnit");
 const Counter = require("../model/counter");
+const Payment = require("../model/payment");
 const { createAuditLog } = require("../utils/auditLogger");
 
 const CACHE_TTL_SECONDS = 300;
@@ -97,7 +98,10 @@ const createSale = async (req, res) => {
       items,
       paymentMethod,
       splitDetails,
-      paymentStatus,
+      paymentStatus: requestedStatus,
+      paidAmount: rawPaidAmount,
+      transactionRef,
+      paymentNotes,
       cashierId,
       cashierName,
     } = req.body;
@@ -375,7 +379,25 @@ const createSale = async (req, res) => {
     const invoiceSeq = (counter && counter.sequence) ? counter.sequence : (Math.floor(Math.random() * 8999) + 1000);
     const invoiceNumber = `${branch.code || 'INV'}-${date}-${String(invoiceSeq).padStart(4, "0")}`;
 
-    const createOpts = sessionOpt ? { session: sessionOpt } : {};
+    // Calculate paidAmount and dueAmount
+    let finalPaidAmount = grandTotal;
+    if (rawPaidAmount !== undefined && rawPaidAmount !== null && rawPaidAmount !== "") {
+      const parsedPaid = Number(rawPaidAmount);
+      if (!isNaN(parsedPaid)) {
+        finalPaidAmount = Math.max(0, Math.min(parsedPaid, grandTotal));
+      }
+    }
+    const finalDueAmount = Math.max(0, Number((grandTotal - finalPaidAmount).toFixed(2)));
+
+    let finalPaymentStatus = "PAID";
+    if (finalDueAmount <= 0) {
+      finalPaymentStatus = "PAID";
+    } else if (finalPaidAmount > 0) {
+      finalPaymentStatus = "PARTIAL";
+    } else {
+      finalPaymentStatus = "UNPAID";
+    }
+
     const sale = await Sale.create(
       [
         {
@@ -395,15 +417,43 @@ const createSale = async (req, res) => {
           sgstTotal,
           igstTotal,
           grandTotal,
+          paidAmount: finalPaidAmount,
+          dueAmount: finalDueAmount,
           paymentMethod: paymentMethod || 'CASH',
           splitDetails,
-          paymentStatus: paymentStatus || 'PAID',
+          paymentStatus: finalPaymentStatus,
           cashierId,
           cashierName,
         },
       ],
       createOpts
     );
+
+    // If initial payment was made, create the first Payment collection record
+    if (finalPaidAmount > 0) {
+      const validPaymentMethods = ["CASH", "UPI", "CARD"];
+      const primaryMethod = validPaymentMethods.includes(paymentMethod) ? paymentMethod : "CASH";
+      await Payment.create(
+        [
+          {
+            companyId,
+            branchId,
+            saleId: sale[0]._id,
+            invoiceNumber,
+            customerName: sale[0].customerName,
+            customerPhone: sale[0].customerPhone,
+            amountPaid: finalPaidAmount,
+            paymentMethod: primaryMethod,
+            transactionRef: transactionRef || "",
+            notes: paymentNotes || "Initial payment on checkout",
+            paymentDate: new Date(),
+            recordedBy: cashierId || req.user?._id || req.user?.userId || sale[0].cashierId,
+            recordedByName: cashierName || req.user?.name || sale[0].cashierName || "Cashier",
+          },
+        ],
+        createOpts
+      );
+    }
 
     await createAuditLog(
       req,
@@ -413,7 +463,7 @@ const createSale = async (req, res) => {
         action: "SALE_CREATE",
         resource: "Sale",
         resourceId: sale[0]._id,
-        details: { invoiceNumber, grandTotal, itemCount: saleItems.length },
+        details: { invoiceNumber, grandTotal, paidAmount: finalPaidAmount, dueAmount: finalDueAmount, paymentStatus: finalPaymentStatus },
       },
       sessionOpt ? { session: sessionOpt } : {}
     );

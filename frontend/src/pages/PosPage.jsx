@@ -78,6 +78,10 @@ export const PosPage = () => {
   const [serialInput, setSerialInput] = useState('');
   const [serialError, setSerialError] = useState('');
 
+  // Due / Partial Payment States
+  const [paidAmountInput, setPaidAmountInput] = useState('');
+  const [isCustomPaid, setIsCustomPaid] = useState(false);
+
   const activeBranchId = selectedBranchId || currentBranch?._id || user?.branchId;
 
   // Fetch branch inventory
@@ -280,12 +284,20 @@ export const PosPage = () => {
     setCheckoutLoading(true);
     setError('');
 
+    const finalPaid = isCustomPaid ? (Number(paidAmountInput) || 0) : totals.grandTotal;
+    const sanitizedPaid = Math.max(0, Math.min(finalPaid, totals.grandTotal));
+    const calculatedDue = Math.max(0, Number((totals.grandTotal - sanitizedPaid).toFixed(2)));
+    const calculatedStatus = calculatedDue <= 0 ? 'PAID' : (sanitizedPaid > 0 ? 'PARTIAL' : 'UNPAID');
+
     const payload = {
       companyId: companyId || user?.companyId,
       branchId: activeBranchId,
       customerName: customerName || 'Walk-in Customer',
       customerPhone: customerPhone || '9999999999',
       customerAddress: customerAddress || '',
+      paidAmount: sanitizedPaid,
+      dueAmount: calculatedDue,
+      paymentStatus: calculatedStatus,
       items: items.map((item) => ({
         productId: item.product._id,
         barcode: item.product.barcode,
@@ -294,7 +306,6 @@ export const PosPage = () => {
         serialNumber: item.product.isSerialized ? (item.serialNumber || '') : '',
       })),
       paymentMethod,
-      paymentStatus: 'PAID',
       cashierId: user?.userId || user?._id,
       cashierName: user?.name || 'Cashier',
     };
@@ -304,6 +315,8 @@ export const PosPage = () => {
       if (res.success && res.data) {
         setCompletedSale(res.data);
         clearCart();
+        setIsCustomPaid(false);
+        setPaidAmountInput('');
         dispatch(recordSaleInDailySummary(res.data));
         dispatch(invalidateProductCaches());
         dispatch(invalidateAnalyticsCache());
@@ -627,6 +640,72 @@ export const PosPage = () => {
               </div>
             </div>
 
+            {/* Amount Paid & Due Controls */}
+            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80 space-y-2 mb-3">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span>Amount Paid</span>
+                <div className="flex items-center gap-1 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomPaid(false);
+                      setPaidAmountInput('');
+                    }}
+                    className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
+                      !isCustomPaid || Number(paidAmountInput) === totals.grandTotal
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Full Paid
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCustomPaid(true);
+                      setPaidAmountInput('0');
+                    }}
+                    className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
+                      isCustomPaid && Number(paidAmountInput) === 0
+                        ? 'bg-rose-600 text-white border-rose-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    Unpaid
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max={totals.grandTotal}
+                  value={isCustomPaid ? paidAmountInput : totals.grandTotal.toFixed(2)}
+                  onChange={(e) => {
+                    setIsCustomPaid(true);
+                    setPaidAmountInput(e.target.value);
+                  }}
+                  className="input-tactile pl-7 text-xs font-mono font-bold py-1.5"
+                  placeholder="Paid amount"
+                />
+              </div>
+
+              {/* Dynamic Due Indicator */}
+              {isCustomPaid && Number(paidAmountInput) < totals.grandTotal && (
+                <div className="flex items-center justify-between text-[11px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200">
+                  <span>Pending Due Balance:</span>
+                  <span>
+                    ₹{Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+
             {/* Calculations Breakdown */}
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs font-mono">
               <div className="flex justify-between text-slate-600">
@@ -655,7 +734,11 @@ export const PosPage = () => {
               disabled={items.length === 0 || checkoutLoading}
               className="btn-primary w-full justify-center py-3 text-sm font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-50"
             >
-              {checkoutLoading ? 'Processing Sale...' : `Checkout (₹${totals.grandTotal.toFixed(2)})`}
+              {checkoutLoading
+                ? 'Processing Sale...'
+                : isCustomPaid && Number(paidAmountInput) < totals.grandTotal
+                ? `Checkout (Pay ₹${Math.max(0, Number(paidAmountInput) || 0).toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)})`
+                : `Checkout (₹${totals.grandTotal.toFixed(2)})`}
             </button>
           </div>
         </div>

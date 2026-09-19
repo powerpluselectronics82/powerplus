@@ -1,12 +1,24 @@
-import React, { useMemo } from 'react';
-import { X, Printer, Download, CheckCircle, Building2 } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { X, Printer, Download, CheckCircle, Building2, DollarSign, History } from 'lucide-react';
 import { numberToWordsInINR } from '../../utils/numberToWords';
 import companyLogo from '../../assets/logo.jpeg';
 import { useBranch } from '../../context/BranchContext';
 import { useAppSelector } from '../../redux/hooks';
+import { ReceivePaymentModal } from './ReceivePaymentModal';
+import { PaymentHistoryModal } from './PaymentHistoryModal';
 
-export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
+export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaymentUpdated }) => {
   if (!isOpen || !sale) return null;
+
+  const [activeSale, setActiveSale] = useState(sale);
+  const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (sale) {
+      setActiveSale(sale);
+    }
+  }, [sale]);
 
   const branchContext = useBranch?.() || {};
   const contextBranches = branchContext.branches || [];
@@ -162,21 +174,22 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
     doc.close();
   };
 
-  const invoiceNumber = sale.invoiceNumber || 'INV-001';
-  const saleDate = sale.createdAt
-    ? new Date(sale.createdAt).toLocaleDateString('en-IN')
+  const invoiceNumber = activeSale.invoiceNumber || sale.invoiceNumber || 'INV-001';
+  const saleDate = (activeSale.createdAt || sale.createdAt)
+    ? new Date(activeSale.createdAt || sale.createdAt).toLocaleDateString('en-IN')
     : new Date().toLocaleDateString('en-IN');
 
-  const customerName = sale.customerName || sale.buyerName || sale.customer?.name || 'Walk-in Customer';
-  const customerPhone = sale.customerPhone || sale.buyerPhone || sale.customer?.phone || '';
+  const customerName = activeSale.customerName || sale.customerName || sale.buyerName || sale.customer?.name || 'Walk-in Customer';
+  const customerPhone = activeSale.customerPhone || sale.customerPhone || sale.buyerPhone || sale.customer?.phone || '';
   const customerAddress =
+    activeSale.customerAddress ||
     sale.customerAddress ||
     sale.buyerAddress ||
     sale.customer?.address ||
     sale.address ||
     '';
-  const cashierName = sale.cashierName || 'Cashier';
-  const branchName = sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
+  const cashierName = activeSale.cashierName || sale.cashierName || 'Cashier';
+  const branchName = activeSale.branchName || sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
   const branchCode = targetBranch?.code || branch?.code || 'BR01';
   const companyName = company?.name || 'POWER PLUS ELECTRONICS';
   const companyGstin = company?.gstin || targetBranch?.gstin || branch?.gstin || '10AAGCK1649C1Z4';
@@ -186,11 +199,14 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
       ? targetBranch.address
       : (company?.address || branch?.address || 'No. 38/ Agora Plaza, Dak Bangala Road, Bihiya Bihar 802152, India');
 
-  const items = Array.isArray(sale.items) && sale.items.length > 0 ? sale.items : [];
-  const subtotal = sale.subtotal || sale.grandTotal || 0;
-  const cgstTotal = sale.cgstTotal || 0;
-  const sgstTotal = sale.sgstTotal || 0;
-  const grandTotal = sale.grandTotal || subtotal;
+  const items = Array.isArray(activeSale.items || sale.items) && (activeSale.items || sale.items).length > 0 ? (activeSale.items || sale.items) : [];
+  const subtotal = Number(activeSale.subtotal ?? sale.subtotal ?? activeSale.grandTotal ?? sale.grandTotal ?? 0);
+  const cgstTotal = Number(activeSale.cgstTotal ?? sale.cgstTotal ?? 0);
+  const sgstTotal = Number(activeSale.sgstTotal ?? sale.sgstTotal ?? 0);
+  const grandTotal = Number(activeSale.grandTotal ?? sale.grandTotal ?? subtotal);
+  const paidAmount = Number(activeSale.paidAmount ?? (activeSale.paymentStatus === 'PAID' ? grandTotal : 0));
+  const dueAmount = Number(activeSale.dueAmount ?? (activeSale.paymentStatus === 'PAID' ? 0 : grandTotal));
+  const paymentStatus = activeSale.paymentStatus || (dueAmount <= 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'UNPAID'));
   const totalInWords = numberToWordsInINR(grandTotal);
 
   return (
@@ -203,8 +219,36 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
             <h3 className="font-extrabold text-sm tracking-wide">
               Official Tax Invoice - {invoiceNumber}
             </h3>
+            <span
+              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ml-2 border ${
+                paymentStatus === 'PAID'
+                  ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                  : paymentStatus === 'PARTIAL'
+                  ? 'bg-amber-950 text-amber-300 border-amber-700'
+                  : 'bg-rose-950 text-rose-300 border-rose-700'
+              }`}
+            >
+              {paymentStatus}
+            </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {dueAmount > 0 && (
+              <button
+                onClick={() => setIsPayModalOpen(true)}
+                className="btn-primary py-1.5 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 shadow-md flex items-center gap-1"
+              >
+                <DollarSign className="w-3.5 h-3.5" /> Pay Due (₹{dueAmount.toFixed(2)})
+              </button>
+            )}
+            {activeSale._id && (
+              <button
+                onClick={() => setIsHistoryModalOpen(true)}
+                className="py-1.5 px-2.5 rounded-lg border border-slate-700 bg-slate-800 text-slate-200 hover:text-white hover:bg-slate-700 text-xs font-bold flex items-center gap-1 transition-colors"
+                title="View Installment History"
+              >
+                <History className="w-3.5 h-3.5 text-indigo-400" /> History
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="btn-primary py-1.5 px-3.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-md"
@@ -305,7 +349,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
             <div className="border-x border-b border-slate-800 p-2.5 bg-slate-100/70 text-[11px] font-semibold">
               <span className="font-bold text-slate-700">Subject : </span>
               <span className="font-mono text-slate-900">
-                RECEIVED BY {sale.paymentMethod || 'CASH'} - PAYMENT COMPLETE (INVOICE #{invoiceNumber})
+                METHOD: {activeSale.paymentMethod || sale.paymentMethod || 'CASH'} — STATUS: {paymentStatus} (PAID: ₹{paidAmount.toFixed(2)}{dueAmount > 0 ? `, DUE: ₹${dueAmount.toFixed(2)}` : ''}) — INVOICE #{invoiceNumber}
               </span>
             </div>
 
@@ -461,11 +505,6 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
                     <span>SGST9 (9%)</span>
                     <span>₹{sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>Rounding</span>
-                    <span>0.03</span>
-                  </div>
-
                   <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-extrabold text-slate-900">
                     <span>Total</span>
                     <span className="text-indigo-900">
@@ -473,9 +512,27 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
                     </span>
                   </div>
 
-                  <div className="flex justify-between text-xs font-bold text-emerald-700 bg-emerald-50 p-1.5 rounded border border-emerald-200 mt-1">
+                  <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
+                    <span>Total Paid</span>
+                    <span className="font-mono font-bold">₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                  </div>
+
+                  {dueAmount > 0 && (
+                    <div className="flex justify-between text-xs font-extrabold text-rose-700 bg-rose-50 p-1.5 rounded border border-rose-200">
+                      <span>Remaining Due</span>
+                      <span className="font-mono">₹{dueAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+
+                  <div className={`flex justify-between text-xs font-bold p-1.5 rounded border mt-1 ${
+                    paymentStatus === 'PAID'
+                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                      : paymentStatus === 'PARTIAL'
+                      ? 'text-amber-800 bg-amber-50 border-amber-200'
+                      : 'text-rose-700 bg-rose-50 border-rose-200'
+                  }`}>
                     <span>Payment Status</span>
-                    <span>PAID (₹{grandTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })})</span>
+                    <span className="font-mono uppercase">{paymentStatus}</span>
                   </div>
                 </div>
 
@@ -489,6 +546,31 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch }) => {
           </div>
         </div>
       </div>
+
+      {/* Receive Due Payment Modal */}
+      {isPayModalOpen && activeSale && (
+        <ReceivePaymentModal
+          isOpen={isPayModalOpen}
+          onClose={() => setIsPayModalOpen(false)}
+          sale={activeSale}
+          onPaymentSuccess={(data) => {
+            if (data?.sale) {
+              setActiveSale(data.sale);
+            }
+            if (onPaymentUpdated) onPaymentUpdated(data);
+          }}
+        />
+      )}
+
+      {/* Payment Installment History Modal */}
+      {isHistoryModalOpen && activeSale?._id && (
+        <PaymentHistoryModal
+          isOpen={isHistoryModalOpen}
+          onClose={() => setIsHistoryModalOpen(false)}
+          saleId={activeSale._id}
+          onReceivePaymentClick={() => setIsPayModalOpen(true)}
+        />
+      )}
     </div>
   );
 };

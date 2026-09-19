@@ -748,6 +748,7 @@ export const DashboardPage = () => {
         isOpen={isInvoiceOpen}
         onClose={() => setIsInvoiceOpen(false)}
         branch={currentBranch}
+        onPaymentUpdated={() => loadDashboardData(true)}
       />
 
       {/* Monthly Sales Summary Modal */}

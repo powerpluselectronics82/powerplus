@@ -10,6 +10,7 @@ import {
   BarChart3,
   Boxes,
   Activity,
+  Wallet,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import companyLogo from '../../assets/logo.jpeg';
@@ -28,6 +29,12 @@ export const DynamicSidebar = () => {
       label: 'POS Terminal',
       path: '/pos',
       icon: ShoppingCart,
+      roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER'],
+    },
+    {
+      label: 'Due Payments',
+      path: '/due-payments',
+      icon: Wallet,
       roles: ['OWNER', 'BRANCH_MANAGER', 'CASHIER'],
     },
     {

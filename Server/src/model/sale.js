@@ -180,7 +180,7 @@ const SaleSchema = new mongoose.Schema(
 
     paymentMethod: {
       type: String,
-      enum: ["CASH", "UPI", "CARD","DUE", "SPLIT"],
+      enum: ["CASH", "UPI", "CARD", "SPLIT"],
       required: true,
     },
 
@@ -197,15 +197,25 @@ const SaleSchema = new mongoose.Schema(
         type: Number,
         default: 0,
       },
-      dueAmount: {
-        type: Number,
-        default: 0,
-      },
+    },
+
+    paidAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    dueAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
 
     paymentStatus: {
       type: String,
-      enum: ["PAID", "UNPAID","DUE"],
+      enum: ["PAID", "PARTIAL", "UNPAID", "DUE"],
+      default: "PAID",
+      index: true,
     },
 
     cashierId: {
@@ -227,6 +237,8 @@ const SaleSchema = new mongoose.Schema(
 // Indexes
 SaleSchema.index({ companyId: 1, invoiceNumber: 1 }, { unique: true });
 SaleSchema.index({ companyId: 1, branchId: 1 });
+SaleSchema.index({ companyId: 1, branchId: 1, paymentStatus: 1 });
+SaleSchema.index({ dueAmount: 1 });
 SaleSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("Sale", SaleSchema);

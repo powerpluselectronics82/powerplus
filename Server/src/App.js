@@ -13,6 +13,7 @@ const brandRouter = require("./router/brand_route");
 const systemRouter = require("./router/system_route");
 const branchInventoryRouter = require("./router/branchInventry_route");
 const purchasesRouter = require("./router/purchases_route");
+const paymentRouter = require("./router/payment_route");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
 
@@ -64,6 +65,7 @@ app.use("/api", brandRouter);
 app.use("/api", systemRouter);
 app.use("/api", branchInventoryRouter);
 app.use("/api", purchasesRouter);
+app.use("/api/payments", paymentRouter);
 
 // Global Error Handler Middleware
 app.use((err, req, res, next) => {

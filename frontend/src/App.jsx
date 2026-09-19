@@ -19,6 +19,7 @@ import { SuppliersPage } from './pages/SuppliersPage';
 import { PurchasesPage } from './pages/PurchasesPage';
 import { AnalyticsPage } from './pages/AnalyticsPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { DuePaymentsPage } from './pages/DuePaymentsPage';
 
 const AppContent = () => {
   const { isAuthenticated } = useAuth();
@@ -51,6 +52,7 @@ const AppContent = () => {
               <Route path="/staff" element={<StaffPage />} />
               <Route path="/suppliers" element={<SuppliersPage />} />
               <Route path="/purchases" element={<PurchasesPage />} />
+              <Route path="/due-payments" element={<DuePaymentsPage />} />
               <Route path="/analytics" element={<AnalyticsPage />} />
               <Route path="/audit-logs" element={<AuditLogsPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
