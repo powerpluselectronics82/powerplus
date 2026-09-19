@@ -209,6 +209,19 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   const paymentStatus = activeSale.paymentStatus || (dueAmount <= 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'UNPAID'));
   const totalInWords = numberToWordsInINR(grandTotal);
 
+  const formattedMethod = useMemo(() => {
+    const method = activeSale?.paymentMethod || sale?.paymentMethod || 'CASH';
+    const split = activeSale?.splitDetails || sale?.splitDetails;
+    if (method === 'SPLIT' && split) {
+      const parts = [];
+      if (Number(split.cashAmount) > 0) parts.push(`Cash: ₹${Number(split.cashAmount).toFixed(2)}`);
+      if (Number(split.cardAmount) > 0) parts.push(`Card: ₹${Number(split.cardAmount).toFixed(2)}`);
+      if (Number(split.upiAmount) > 0) parts.push(`UPI: ₹${Number(split.upiAmount).toFixed(2)}`);
+      return parts.length > 0 ? `SPLIT (${parts.join(', ')})` : 'SPLIT';
+    }
+    return method;
+  }, [activeSale, sale]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-white print:overflow-visible">
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh] print:max-h-none print:shadow-none print:border-none print:overflow-visible print:w-full print:max-w-none">
@@ -349,7 +362,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
             <div className="border-x border-b border-slate-800 p-2.5 bg-slate-100/70 text-[11px] font-semibold">
               <span className="font-bold text-slate-700">Subject : </span>
               <span className="font-mono text-slate-900">
-                METHOD: {activeSale.paymentMethod || sale.paymentMethod || 'CASH'} — STATUS: {paymentStatus} (PAID: ₹{paidAmount.toFixed(2)}{dueAmount > 0 ? `, DUE: ₹${dueAmount.toFixed(2)}` : ''}) — INVOICE #{invoiceNumber}
+                METHOD: {formattedMethod} — STATUS: {paymentStatus} (PAID: ₹{paidAmount.toFixed(2)}{dueAmount > 0 ? `, DUE: ₹${dueAmount.toFixed(2)}` : ''}) — INVOICE #{invoiceNumber}
               </span>
             </div>
 
@@ -513,7 +526,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                   </div>
 
                   <div className="flex justify-between text-xs font-semibold text-emerald-700 pt-1">
-                    <span>Total Paid</span>
+                    <span>Total Paid ({activeSale?.paymentMethod === 'SPLIT' || sale?.paymentMethod === 'SPLIT' ? 'Split' : (activeSale?.paymentMethod || sale?.paymentMethod || 'Cash')})</span>
                     <span className="font-mono font-bold">₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                   </div>
 

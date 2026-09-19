@@ -14,6 +14,7 @@ import {
   CreditCard,
   Banknote,
   QrCode,
+  Split,
   CheckCircle,
   AlertCircle,
   Receipt,
@@ -82,6 +83,18 @@ export const PosPage = () => {
   // Due / Partial Payment States
   const [paidAmountInput, setPaidAmountInput] = useState('');
   const [isCustomPaid, setIsCustomPaid] = useState(false);
+
+  // Split Payment Breakdown States (Cash, Card, UPI)
+  const [splitAmounts, setSplitAmounts] = useState({
+    cash: '',
+    card: '',
+    upi: '',
+  });
+
+  const splitCashVal = Number(splitAmounts.cash) || 0;
+  const splitCardVal = Number(splitAmounts.card) || 0;
+  const splitUpiVal = Number(splitAmounts.upi) || 0;
+  const splitTotalPaid = Number((splitCashVal + splitCardVal + splitUpiVal).toFixed(2));
 
   const activeBranchId = selectedBranchId || currentBranch?._id || user?.branchId;
 
@@ -285,7 +298,9 @@ export const PosPage = () => {
     setCheckoutLoading(true);
     setError('');
 
-    const finalPaid = isCustomPaid ? (Number(paidAmountInput) || 0) : totals.grandTotal;
+    const finalPaid = paymentMethod === 'SPLIT'
+      ? splitTotalPaid
+      : (isCustomPaid ? (Number(paidAmountInput) || 0) : totals.grandTotal);
     const sanitizedPaid = Math.max(0, Math.min(finalPaid, totals.grandTotal));
     const calculatedDue = Math.max(0, Number((totals.grandTotal - sanitizedPaid).toFixed(2)));
     const calculatedStatus = calculatedDue <= 0 ? 'PAID' : (sanitizedPaid > 0 ? 'PARTIAL' : 'UNPAID');
@@ -311,6 +326,12 @@ export const PosPage = () => {
       paidAmount: sanitizedPaid,
       dueAmount: calculatedDue,
       paymentStatus: calculatedStatus,
+      paymentMethod,
+      splitDetails: paymentMethod === 'SPLIT' ? {
+        cashAmount: splitCashVal,
+        cardAmount: splitCardVal,
+        upiAmount: splitUpiVal,
+      } : undefined,
       items: items.map((item) => ({
         productId: item.product._id,
         barcode: item.product.barcode,
@@ -318,7 +339,6 @@ export const PosPage = () => {
         mrp: item.product.mrp !== undefined && item.product.mrp !== null ? item.product.mrp : (item.product.sellingPrice || 0),
         serialNumber: item.product.isSerialized ? (item.serialNumber || '') : '',
       })),
-      paymentMethod,
       cashierId: resolvedCashierId,
       cashierName: user?.name || 'Cashier',
     };
@@ -330,6 +350,7 @@ export const PosPage = () => {
         clearCart();
         setIsCustomPaid(false);
         setPaidAmountInput('');
+        setSplitAmounts({ cash: '', card: '', upi: '' });
         dispatch(recordSaleInDailySummary(res.data));
         dispatch(invalidateProductCaches());
         dispatch(invalidateAnalyticsCache());
@@ -628,11 +649,12 @@ export const PosPage = () => {
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
                 Payment Mode
               </span>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
                 {[
                   { id: 'CASH', label: 'Cash', icon: Banknote },
                   { id: 'CARD', label: 'Card', icon: CreditCard },
                   { id: 'UPI', label: 'UPI/QR', icon: QrCode },
+                  { id: 'SPLIT', label: 'Split', icon: Split },
                 ].map((m) => {
                   const Icon = m.icon;
                   const isSelected = paymentMethod === m.id;
@@ -641,12 +663,12 @@ export const PosPage = () => {
                       key={m.id}
                       type="button"
                       onClick={() => setPaymentMethod(m.id)}
-                      className={`flex items-center justify-center gap-1.5 py-1.5 rounded-xl border text-xs font-bold transition-all ${isSelected
+                      className={`flex items-center justify-center gap-1 sm:gap-1.5 py-1.5 px-1 rounded-xl border text-xs font-bold transition-all ${isSelected
                           ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                           : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                         }`}
                     >
-                      <Icon className="w-3.5 h-3.5" />
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
                       <span>{m.label}</span>
                     </button>
                   );
@@ -654,71 +676,171 @@ export const PosPage = () => {
               </div>
             </div>
 
-            {/* Amount Paid & Due Controls */}
-            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80 space-y-2 mb-3">
-              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
-                <span>Amount Paid</span>
-                <div className="flex items-center gap-1 text-[10px] font-mono">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCustomPaid(false);
-                      setPaidAmountInput('');
-                    }}
-                    className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
-                      !isCustomPaid || Number(paidAmountInput) === totals.grandTotal
-                        ? 'bg-emerald-600 text-white border-emerald-600'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Full Paid
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCustomPaid(true);
-                      setPaidAmountInput('0');
-                    }}
-                    className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
-                      isCustomPaid && Number(paidAmountInput) === 0
-                        ? 'bg-rose-600 text-white border-rose-600'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                    }`}
-                  >
-                    Unpaid
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
-                  ₹
-                </span>
-                <input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={totals.grandTotal}
-                  value={isCustomPaid ? paidAmountInput : totals.grandTotal.toFixed(2)}
-                  onChange={(e) => {
-                    setIsCustomPaid(true);
-                    setPaidAmountInput(e.target.value);
-                  }}
-                  className="input-tactile pl-7 text-xs font-mono font-bold py-1.5"
-                  placeholder="Paid amount"
-                />
-              </div>
-
-              {/* Dynamic Due Indicator */}
-              {isCustomPaid && Number(paidAmountInput) < totals.grandTotal && (
-                <div className="flex items-center justify-between text-[11px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200">
-                  <span>Pending Due Balance:</span>
-                  <span>
-                    ₹{Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)}
+            {/* Split Payment Controls vs Single Mode Controls */}
+            {paymentMethod === 'SPLIT' ? (
+              <div className="bg-indigo-50/70 p-3 rounded-2xl border border-indigo-200/80 space-y-2.5 mb-3">
+                <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
+                  <span className="flex items-center gap-1.5">
+                    <Split className="w-3.5 h-3.5 text-indigo-600" />
+                    Split Breakdown
+                  </span>
+                  <span className="font-mono text-[11px] bg-white text-indigo-700 px-2 py-0.5 rounded-md border border-indigo-200 font-extrabold">
+                    Total Bill: ₹{totals.grandTotal.toFixed(2)}
                   </span>
                 </div>
-              )}
-            </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 flex items-center gap-1 mb-1">
+                      <Banknote className="w-3 h-3 text-emerald-600" /> Cash
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={splitAmounts.cash}
+                        onChange={(e) => setSplitAmounts(prev => ({ ...prev, cash: e.target.value }))}
+                        placeholder="0.00"
+                        className="input-tactile pl-6 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 flex items-center gap-1 mb-1">
+                      <CreditCard className="w-3 h-3 text-blue-600" /> Card
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={splitAmounts.card}
+                        onChange={(e) => setSplitAmounts(prev => ({ ...prev, card: e.target.value }))}
+                        placeholder="0.00"
+                        className="input-tactile pl-6 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 flex items-center gap-1 mb-1">
+                      <QrCode className="w-3 h-3 text-purple-600" /> UPI/QR
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={splitAmounts.upi}
+                        onChange={(e) => setSplitAmounts(prev => ({ ...prev, upi: e.target.value }))}
+                        placeholder="0.00"
+                        className="input-tactile pl-6 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Paid Amount = Cash + Card + UPI Badge */}
+                <div className="pt-1 flex items-center justify-between text-xs font-mono border-t border-indigo-200/60">
+                  <span className="text-slate-700 font-bold text-[11px]">
+                    Paid Amount (Cash + Card + UPI):
+                  </span>
+                  <span className="font-extrabold text-indigo-700 bg-white px-2.5 py-0.5 rounded-lg border border-indigo-200">
+                    ₹{splitTotalPaid.toFixed(2)}
+                  </span>
+                </div>
+
+                {/* Dynamic Due / Overpaid Indicator */}
+                {splitTotalPaid < totals.grandTotal ? (
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-rose-600 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                    <span>Pending Due Balance:</span>
+                    <span>₹{Math.max(0, totals.grandTotal - splitTotalPaid).toFixed(2)}</span>
+                  </div>
+                ) : splitTotalPaid === totals.grandTotal ? (
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                    <span className="flex items-center gap-1">
+                      <CheckCircle className="w-3 h-3 text-emerald-600" /> Fully Settled
+                    </span>
+                    <span>Due: ₹0.00</span>
+                  </div>
+                ) : (
+                  <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
+                    Sum exceeds bill total by ₹{(splitTotalPaid - totals.grandTotal).toFixed(2)}. Max payable is ₹{totals.grandTotal.toFixed(2)}.
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Amount Paid & Due Controls for Single Payment Modes */
+              <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80 space-y-2 mb-3">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                  <span>Amount Paid</span>
+                  <div className="flex items-center gap-1 text-[10px] font-mono">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomPaid(false);
+                        setPaidAmountInput('');
+                      }}
+                      className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
+                        !isCustomPaid || Number(paidAmountInput) === totals.grandTotal
+                          ? 'bg-emerald-600 text-white border-emerald-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Full Paid
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCustomPaid(true);
+                        setPaidAmountInput('0');
+                      }}
+                      className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
+                        isCustomPaid && Number(paidAmountInput) === 0
+                          ? 'bg-rose-600 text-white border-rose-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      Unpaid
+                    </button>
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
+                    ₹
+                  </span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    max={totals.grandTotal}
+                    value={isCustomPaid ? paidAmountInput : totals.grandTotal.toFixed(2)}
+                    onChange={(e) => {
+                      setIsCustomPaid(true);
+                      setPaidAmountInput(e.target.value);
+                    }}
+                    className="input-tactile pl-7 text-xs font-mono font-bold py-1.5"
+                    placeholder="Paid amount"
+                  />
+                </div>
+
+                {/* Dynamic Due Indicator */}
+                {isCustomPaid && Number(paidAmountInput) < totals.grandTotal && (
+                  <div className="flex items-center justify-between text-[11px] font-mono font-bold text-rose-600 bg-rose-50 px-2 py-1 rounded-lg border border-rose-200">
+                    <span>Pending Due Balance:</span>
+                    <span>
+                      ₹{Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Calculations Breakdown */}
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs font-mono">
@@ -760,6 +882,10 @@ export const PosPage = () => {
             >
               {checkoutLoading
                 ? 'Processing Sale...'
+                : paymentMethod === 'SPLIT'
+                ? splitTotalPaid < totals.grandTotal
+                  ? `Checkout (Pay ₹${splitTotalPaid.toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - splitTotalPaid).toFixed(2)})`
+                  : `Checkout (Paid Full ₹${Math.min(splitTotalPaid, totals.grandTotal).toFixed(2)})`
                 : isCustomPaid && Number(paidAmountInput) < totals.grandTotal
                 ? `Checkout (Pay ₹${Math.max(0, Number(paidAmountInput) || 0).toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)})`
                 : `Checkout (₹${totals.grandTotal.toFixed(2)})`}

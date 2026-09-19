@@ -434,7 +434,13 @@ const createSale = async (req, res) => {
 
     // Calculate paidAmount and dueAmount
     let finalPaidAmount = grandTotal;
-    if (rawPaidAmount !== undefined && rawPaidAmount !== null && rawPaidAmount !== "") {
+    if (paymentMethod === "SPLIT" && splitDetails) {
+      const splitCash = Number(splitDetails.cashAmount) || 0;
+      const splitCard = Number(splitDetails.cardAmount) || 0;
+      const splitUpi = Number(splitDetails.upiAmount) || 0;
+      const splitSum = splitCash + splitCard + splitUpi;
+      finalPaidAmount = Math.max(0, Math.min(rawPaidAmount !== undefined && rawPaidAmount !== null && rawPaidAmount !== "" ? Number(rawPaidAmount) : splitSum, grandTotal));
+    } else if (rawPaidAmount !== undefined && rawPaidAmount !== null && rawPaidAmount !== "") {
       const parsedPaid = Number(rawPaidAmount);
       if (!isNaN(parsedPaid)) {
         finalPaidAmount = Math.max(0, Math.min(parsedPaid, grandTotal));
@@ -484,7 +490,11 @@ const createSale = async (req, res) => {
           paidAmount: finalPaidAmount,
           dueAmount: finalDueAmount,
           paymentMethod: paymentMethod || 'CASH',
-          splitDetails,
+          splitDetails: paymentMethod === 'SPLIT' && splitDetails ? {
+            cashAmount: Number(splitDetails.cashAmount) || 0,
+            cardAmount: Number(splitDetails.cardAmount) || 0,
+            upiAmount: Number(splitDetails.upiAmount) || 0,
+          } : undefined,
           paymentStatus: finalPaymentStatus,
           cashierId: validCashierId,
           cashierName: validCashierName,
@@ -493,30 +503,114 @@ const createSale = async (req, res) => {
       createOpts
     );
 
-    // If initial payment was made, create the first Payment collection record
+    // If initial payment was made, create the Payment collection record(s)
     if (finalPaidAmount > 0) {
-      const validPaymentMethods = ["CASH", "UPI", "CARD"];
-      const primaryMethod = validPaymentMethods.includes(paymentMethod) ? paymentMethod : "CASH";
-      await Payment.create(
-        [
-          {
+      if (paymentMethod === "SPLIT" && splitDetails) {
+        const splitCash = Number(splitDetails.cashAmount) || 0;
+        const splitCard = Number(splitDetails.cardAmount) || 0;
+        const splitUpi = Number(splitDetails.upiAmount) || 0;
+
+        const splitDocs = [];
+        if (splitCash > 0) {
+          splitDocs.push({
             companyId,
             branchId,
             saleId: sale[0]._id,
             invoiceNumber,
             customerName: sale[0].customerName,
             customerPhone: sale[0].customerPhone,
-            amountPaid: finalPaidAmount,
-            paymentMethod: primaryMethod,
+            amountPaid: splitCash,
+            paymentMethod: "CASH",
             transactionRef: transactionRef || "",
-            notes: paymentNotes || "Initial payment on checkout",
+            notes: paymentNotes ? `${paymentNotes} (Split: Cash)` : "Split payment: Cash",
             paymentDate: new Date(),
             recordedBy: validCashierId,
             recordedByName: validCashierName,
-          },
-        ],
-        createOpts
-      );
+          });
+        }
+        if (splitCard > 0) {
+          splitDocs.push({
+            companyId,
+            branchId,
+            saleId: sale[0]._id,
+            invoiceNumber,
+            customerName: sale[0].customerName,
+            customerPhone: sale[0].customerPhone,
+            amountPaid: splitCard,
+            paymentMethod: "CARD",
+            transactionRef: transactionRef || "",
+            notes: paymentNotes ? `${paymentNotes} (Split: Card)` : "Split payment: Card",
+            paymentDate: new Date(),
+            recordedBy: validCashierId,
+            recordedByName: validCashierName,
+          });
+        }
+        if (splitUpi > 0) {
+          splitDocs.push({
+            companyId,
+            branchId,
+            saleId: sale[0]._id,
+            invoiceNumber,
+            customerName: sale[0].customerName,
+            customerPhone: sale[0].customerPhone,
+            amountPaid: splitUpi,
+            paymentMethod: "UPI",
+            transactionRef: transactionRef || "",
+            notes: paymentNotes ? `${paymentNotes} (Split: UPI)` : "Split payment: UPI",
+            paymentDate: new Date(),
+            recordedBy: validCashierId,
+            recordedByName: validCashierName,
+          });
+        }
+
+        if (splitDocs.length > 0) {
+          await Payment.create(splitDocs, createOpts);
+        } else {
+          await Payment.create(
+            [
+              {
+                companyId,
+                branchId,
+                saleId: sale[0]._id,
+                invoiceNumber,
+                customerName: sale[0].customerName,
+                customerPhone: sale[0].customerPhone,
+                amountPaid: finalPaidAmount,
+                paymentMethod: "SPLIT",
+                transactionRef: transactionRef || "",
+                notes: paymentNotes || "Split payment checkout",
+                paymentDate: new Date(),
+                recordedBy: validCashierId,
+                recordedByName: validCashierName,
+              },
+            ],
+            createOpts
+          );
+        }
+      } else {
+        const validPaymentMethods = ["CASH", "UPI", "CARD", "SPLIT"];
+        const primaryMethod = validPaymentMethods.includes(paymentMethod) ? paymentMethod : "CASH";
+        await Payment.create(
+          [
+            {
+              companyId,
+              branchId,
+              saleId: sale[0]._id,
+              invoiceNumber,
+              customerName: sale[0].customerName,
+              customerPhone: sale[0].customerPhone,
+              amountPaid: finalPaidAmount,
+              paymentMethod: primaryMethod,
+              transactionRef: transactionRef || "",
+              notes: paymentNotes || "Initial payment on checkout",
+              paymentDate: new Date(),
+              recordedBy: validCashierId,
+              recordedByName: validCashierName,
+            },
+          ],
+          createOpts
+        );
+      }
     }
 
     await createAuditLog(
