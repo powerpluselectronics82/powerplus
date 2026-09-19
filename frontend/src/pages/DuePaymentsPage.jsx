@@ -40,15 +40,33 @@ export const DuePaymentsPage = () => {
   const [selectedSaleForHistory, setSelectedSaleForHistory] = useState(null);
   const [selectedSaleForInvoice, setSelectedSaleForInvoice] = useState(null);
 
-  const isOwner = role?.toUpperCase() === 'OWNER';
+  const userRole = String(role || user?.role || '').toUpperCase();
+  const isOwner = userRole === 'OWNER' || userRole === 'ADMIN';
+
+  // Branch list fallback if context hasn't populated yet
+  const [branchList, setBranchList] = useState(branches || []);
+
+  useEffect(() => {
+    if (branches && branches.length > 0) {
+      setBranchList(branches);
+    } else {
+      branchService
+        .getAllBranches()
+        .then((res) => {
+          if (res?.success && Array.isArray(res.data)) {
+            setBranchList(res.data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [branches]);
 
   const fetchDueSales = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const branchParam = isOwner ? filterBranchId : (user?.branchId || '');
       const res = await paymentService.getDueSales({
-        branchId: branchParam,
+        branchId: filterBranchId || '',
         search: searchQuery.trim(),
         status: statusFilter,
         page,
@@ -64,7 +82,7 @@ export const DuePaymentsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [isOwner, filterBranchId, user?.branchId, searchQuery, statusFilter, page]);
+  }, [filterBranchId, searchQuery, statusFilter, page]);
 
   useEffect(() => {
     fetchDueSales();
@@ -93,28 +111,26 @@ export const DuePaymentsPage = () => {
           </p>
         </div>
 
-        {/* Branch Selector (if Owner) */}
+        {/* Branch Selector (available for all roles) */}
         <div className="flex items-center gap-3">
-          {isOwner && (
-            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm text-xs">
-              <Building2 className="w-4 h-4 text-slate-400" />
-              <select
-                value={filterBranchId}
-                onChange={(e) => {
-                  setFilterBranchId(e.target.value);
-                  setPage(1);
-                }}
-                className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
-              >
-                <option value="">All Company Branches</option>
-                {branches.map((b) => (
-                  <option key={b._id} value={b._id}>
-                    {b.name} ({b.code})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm text-xs">
+            <Building2 className="w-4 h-4 text-slate-400" />
+            <select
+              value={filterBranchId}
+              onChange={(e) => {
+                setFilterBranchId(e.target.value);
+                setPage(1);
+              }}
+              className="bg-transparent font-bold text-slate-800 focus:outline-none cursor-pointer"
+            >
+              <option value="">All Company Branches</option>
+              {branchList.map((b) => (
+                <option key={b._id} value={b._id}>
+                  {b.name} {b.code ? `(${b.code})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
 
           <button
             onClick={() => fetchDueSales()}

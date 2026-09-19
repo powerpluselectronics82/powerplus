@@ -12,24 +12,30 @@ export const BranchProvider = ({ children }) => {
 
   const fetchBranches = async () => {
     if (!user) return;
-    setLoading(true);
     try {
-      if (user.role === 'OWNER') {
-        const res = await branchService.getAllBranches();
-        if (res.success && Array.isArray(res.data)) {
-          setBranches(res.data);
-          if (!selectedBranchId && res.data.length > 0) {
-            setSelectedBranchId(res.data[0]._id);
-          }
+      const res = await branchService.getAllBranches();
+      if (res?.success && Array.isArray(res.data)) {
+        setBranches(res.data);
+        if (!selectedBranchId && res.data.length > 0) {
+          setSelectedBranchId(res.data[0]._id);
         }
       } else if (user.branchId) {
         setSelectedBranchId(user.branchId);
-        const res = await branchService.getBranchById(user.branchId);
-        if (res.success && res.data) {
-          setBranches([res.data]);
+        const fallbackRes = await branchService.getBranchById(user.branchId);
+        if (fallbackRes?.success && fallbackRes.data) {
+          setBranches([fallbackRes.data]);
         }
       }
     } catch (err) {
+      if (user.branchId) {
+        try {
+          setSelectedBranchId(user.branchId);
+          const fallbackRes = await branchService.getBranchById(user.branchId);
+          if (fallbackRes?.success && fallbackRes.data) {
+            setBranches([fallbackRes.data]);
+          }
+        } catch (_) {}
+      }
       console.error('Failed to load branches:', err);
     } finally {
       setLoading(false);

@@ -276,8 +276,8 @@ const getDueSales = async (req, res) => {
       ],
     };
 
-    // Role-based or selected branch filter
-    const targetBranchId = req.user?.role !== "OWNER" ? req.user?.branchId : branchId;
+    // Branch filter: if a specific branchId is provided, filter by it; if empty, show all branches
+    const targetBranchId = branchId;
     if (targetBranchId && mongoose.isValidObjectId(targetBranchId)) {
       const brObjectId = new mongoose.Types.ObjectId(targetBranchId);
       filter.$and.push({ branchId: { $in: [brObjectId, String(targetBranchId)] } });

@@ -18,7 +18,7 @@ export const TopHeader = () => {
           <span className="text-xs font-semibold text-slate-400 block uppercase tracking-wider">
             Active Branch
           </span>
-          {role === 'OWNER' ? (
+          {branches.length > 1 ? (
             <select
               value={selectedBranchId}
               onChange={(e) => setSelectedBranchId(e.target.value)}
