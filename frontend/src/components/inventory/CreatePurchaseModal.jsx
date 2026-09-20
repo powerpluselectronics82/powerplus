@@ -237,16 +237,108 @@ const ProductSearchSelector = ({ item, index, products, onSelect, onClear }) => 
   );
 };
 
+// Pure helper to merge catalog and branch products
+const computeMergedProducts = (catList = [], branchList = []) => {
+  const branchPriceMap = new Map();
+  if (Array.isArray(branchList)) {
+    for (const bp of branchList) {
+      if (!bp) continue;
+      const pId = bp.productId?._id
+        ? String(bp.productId._id)
+        : bp.productId
+        ? String(bp.productId)
+        : null;
+      const bCode = bp.productId?.barcode || bp.barcode;
+      const info = {
+        mrp: bp.mrp || 0,
+        sellingPrice: bp.sellingPrice || 0,
+        purchasePrice: bp.purchasePrice || 0,
+      };
+      if (pId) branchPriceMap.set(pId, info);
+      if (bCode) branchPriceMap.set(String(bCode).trim().toLowerCase(), info);
+    }
+  }
+
+  const uniqueProducts = [];
+  const seenBarcodes = new Set();
+  const seenIds = new Set();
+
+  if (Array.isArray(catList)) {
+    for (const p of catList) {
+      if (!p) continue;
+      const barcode = p.barcode ? String(p.barcode).trim().toLowerCase() : null;
+      const id = p._id ? String(p._id) : null;
+
+      if (barcode) {
+        if (seenBarcodes.has(barcode)) continue;
+        seenBarcodes.add(barcode);
+      } else if (id) {
+        if (seenIds.has(id)) continue;
+        seenIds.add(id);
+      }
+
+      const branchPricing =
+        (id && branchPriceMap.get(id)) ||
+        (barcode && branchPriceMap.get(barcode)) ||
+        {};
+
+      uniqueProducts.push({
+        ...p,
+        mrp: branchPricing.mrp || p.mrp || 0,
+        purchasePrice: branchPricing.purchasePrice || p.purchasePrice || '',
+      });
+    }
+  }
+
+  if (Array.isArray(branchList)) {
+    for (const bp of branchList) {
+      if (!bp) continue;
+      const itemProd =
+        bp.productId && typeof bp.productId === 'object' ? bp.productId : bp;
+      if (!itemProd) continue;
+
+      const barcode = itemProd.barcode
+        ? String(itemProd.barcode).trim().toLowerCase()
+        : null;
+      const id = itemProd._id ? String(itemProd._id) : null;
+
+      if (barcode && seenBarcodes.has(barcode)) continue;
+      if (id && seenIds.has(id)) continue;
+
+      if (barcode) seenBarcodes.add(barcode);
+      if (id) seenIds.add(id);
+
+      uniqueProducts.push({
+        ...itemProd,
+        mrp: bp.mrp || itemProd.mrp || 0,
+        purchasePrice: bp.purchasePrice || itemProd.purchasePrice || '',
+      });
+    }
+  }
+
+  return uniqueProducts;
+};
+
 export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
   const dispatch = useAppDispatch();
   const { suppliers: reduxSuppliers } = useAppSelector((state) => state.suppliers);
-  const { catalogProducts: reduxCatalog } = useAppSelector((state) => state.products);
+  const { catalogProducts: reduxCatalog, branchProducts: reduxBranchProducts } = useAppSelector((state) => state.products);
   const { currentBranch, selectedBranchId } = useBranch();
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+
+  const availableSuppliers = useMemo(() => {
+    if (suppliers.length > 0) return suppliers;
+    return reduxSuppliers || [];
+  }, [suppliers, reduxSuppliers]);
+
+  const availableProducts = useMemo(() => {
+    if (products.length > 0) return products;
+    return computeMergedProducts(reduxCatalog, reduxBranchProducts);
+  }, [products, reduxCatalog, reduxBranchProducts]);
 
   const [formData, setFormData] = useState({
     supplierId: '',
@@ -305,108 +397,38 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
   }, [isOpen, selectedBranchId]);
 
   const fetchInitialData = async () => {
-    setLoading(true);
+    // Only show full-screen spinner if we have no cached data at all
+    const hasData = (availableSuppliers && availableSuppliers.length > 0) || (availableProducts && availableProducts.length > 0);
+    if (!hasData) {
+      setLoading(true);
+    }
     setError('');
+
     try {
-      // 1. Fetch suppliers (from Redux cache or API fallback)
-      let supList = reduxSuppliers;
-      if (!supList || supList.length === 0) {
-        const supRes = await supplierService.getAllSuppliers();
-        if (supRes?.success) supList = supRes.data || [];
-      }
-      setSuppliers(supList || []);
+      // Parallelize requests with Promise.all to avoid slow sequential chaining
+      const [supRes, catRes, branchProdRes] = await Promise.all([
+        (!reduxSuppliers || reduxSuppliers.length === 0)
+          ? supplierService.getAllSuppliers().catch(() => ({ success: false, data: [] }))
+          : Promise.resolve({ success: true, data: reduxSuppliers }),
+        (!reduxCatalog || reduxCatalog.length === 0)
+          ? productService.getAllProducts().catch(() => ({ success: false, data: [] }))
+          : Promise.resolve({ success: true, data: reduxCatalog }),
+        selectedBranchId
+          ? productService.getBranchProducts(selectedBranchId).catch(() => ({ success: false, data: [] }))
+          : Promise.resolve({ success: false, data: [] }),
+      ]);
 
-      // 2. Fetch master catalog products (from Redux cache or API fallback)
-      let catList = reduxCatalog;
-      if (!catList || catList.length === 0) {
-        const allProdRes = await productService.getAllProducts();
-        if (allProdRes?.success) catList = allProdRes.data || [];
-      }
-
-      // 3. Optionally fetch branch products to attach any existing branch pricing/MRP
-      const branchProdRes = selectedBranchId
-        ? await productService.getBranchProducts(selectedBranchId)
-        : { success: false, data: [] };
-
-      // Map branch pricing by product ID and barcode if available
-      const branchPriceMap = new Map();
-      if (branchProdRes?.success && Array.isArray(branchProdRes.data)) {
-        for (const bp of branchProdRes.data) {
-          const pId = bp.productId?._id
-            ? String(bp.productId._id)
-            : bp.productId
-            ? String(bp.productId)
-            : null;
-          const bCode = bp.productId?.barcode || bp.barcode;
-          const info = {
-            mrp: bp.mrp || 0,
-            sellingPrice: bp.sellingPrice || 0,
-            purchasePrice: bp.purchasePrice || 0,
-          };
-          if (pId) branchPriceMap.set(pId, info);
-          if (bCode) branchPriceMap.set(String(bCode).trim().toLowerCase(), info);
-        }
+      const supList = supRes?.data || [];
+      if (supList.length > 0) {
+        setSuppliers(supList);
       }
 
-      const uniqueProducts = [];
-      const seenBarcodes = new Set();
-      const seenIds = new Set();
-
-      // Prioritize ALL products created in the Product Section (Master Catalog)
-      if (Array.isArray(catList)) {
-        for (const p of catList) {
-          if (!p) continue;
-          const barcode = p.barcode ? String(p.barcode).trim().toLowerCase() : null;
-          const id = p._id ? String(p._id) : null;
-
-          if (barcode) {
-            if (seenBarcodes.has(barcode)) continue;
-            seenBarcodes.add(barcode);
-          } else if (id) {
-            if (seenIds.has(id)) continue;
-            seenIds.add(id);
-          }
-
-          const branchPricing =
-            (id && branchPriceMap.get(id)) ||
-            (barcode && branchPriceMap.get(barcode)) ||
-            {};
-
-          uniqueProducts.push({
-            ...p,
-            mrp: branchPricing.mrp || p.mrp || 0,
-            purchasePrice: branchPricing.purchasePrice || p.purchasePrice || '',
-          });
-        }
+      const catList = catRes?.data || [];
+      const branchList = branchProdRes?.data || [];
+      const merged = computeMergedProducts(catList, branchList);
+      if (merged.length > 0) {
+        setProducts(merged);
       }
-
-      // Also include any branch inventory items that might not be in the allProdRes list
-      if (branchProdRes?.success && Array.isArray(branchProdRes.data)) {
-        for (const bp of branchProdRes.data) {
-          const itemProd =
-            bp.productId && typeof bp.productId === 'object' ? bp.productId : bp;
-          if (!itemProd) continue;
-
-          const barcode = itemProd.barcode
-            ? String(itemProd.barcode).trim().toLowerCase()
-            : null;
-          const id = itemProd._id ? String(itemProd._id) : null;
-
-          if (barcode && seenBarcodes.has(barcode)) continue;
-          if (id && seenIds.has(id)) continue;
-
-          if (barcode) seenBarcodes.add(barcode);
-          if (id) seenIds.add(id);
-
-          uniqueProducts.push({
-            ...itemProd,
-            mrp: bp.mrp || itemProd.mrp || 0,
-            purchasePrice: bp.purchasePrice || itemProd.purchasePrice || '',
-          });
-        }
-      }
-
-      setProducts(uniqueProducts);
     } catch (err) {
       console.error('Failed to load purchase modal data:', err);
       setError('Failed to load suppliers or product catalog');
@@ -417,7 +439,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleSupplierChange = (e) => {
     const selectedId = e.target.value;
-    const found = suppliers.find((s) => s._id === selectedId);
+    const found = availableSuppliers.find((s) => s._id === selectedId);
     setFormData({
       ...formData,
       supplierId: selectedId,
@@ -641,9 +663,10 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           )}
 
-          {loading ? (
-            <div className="p-12 text-center text-slate-400 font-medium">
-              Loading suppliers and catalog...
+          {loading && availableSuppliers.length === 0 ? (
+            <div className="p-12 text-center text-slate-400 font-medium flex items-center justify-center gap-2">
+              <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+              <span>Loading suppliers and catalog...</span>
             </div>
           ) : (
             <form id="purchase-form" onSubmit={handleSubmit} className="space-y-6">
@@ -660,7 +683,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                     required
                   >
                     <option value="">-- Select Supplier --</option>
-                    {suppliers.map((s) => (
+                    {availableSuppliers.map((s) => (
                       <option key={s._id} value={s._id}>
                         {s.name} {s.brand ? `(${s.brand})` : ''}
                       </option>
@@ -781,7 +804,7 @@ export const CreatePurchaseModal = ({ isOpen, onClose, onSuccess }) => {
                             <ProductSearchSelector
                               item={item}
                               index={idx}
-                              products={products}
+                              products={availableProducts}
                               onSelect={handleProductSelect}
                               onClear={handleProductClear}
                             />
