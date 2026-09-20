@@ -283,6 +283,12 @@ body {
     visibility: visible !important;
   }
 
+  #tax-invoice-print-area,
+  #tax-invoice-print-area * {
+    color: #000000 !important;
+    border-color: #000000 !important;
+  }
+
   #printable-receipt,
   #tax-invoice-print-area,
   #monthly-sales-print-area {

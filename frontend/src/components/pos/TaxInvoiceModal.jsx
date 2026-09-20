@@ -137,9 +137,22 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
             body {
               font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
               background-color: #ffffff;
-              color: #0f172a;
+              color: #000000 !important;
               margin: 0;
               padding: 12px;
+            }
+            /* Force all text in printed invoice to be pure black */
+            body, p, span, h1, h2, h3, h4, h5, h6, th, td, div, ol, li, a, strong, b, em {
+              color: #000000 !important;
+            }
+            /* Ensure borders print dark and crisp */
+            .border-slate-800,
+            .border-slate-700,
+            .border-slate-300,
+            .border-slate-200,
+            .divide-slate-300 > :not([hidden]) ~ :not([hidden]),
+            table, th, td {
+              border-color: #000000 !important;
             }
             @page {
               size: A4;
@@ -482,11 +495,10 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                   <span className="font-extrabold text-slate-800 block text-[10px] uppercase tracking-wider">
                     Details for Transferring Funds
                   </span>
-                  <p><span className="font-semibold text-slate-600">Bank Name:</span> Bank of Baroda</p>
+                  <p><span className="font-semibold text-slate-600">Bank Name:</span> Axis Bank</p>
                   <p><span className="font-semibold text-slate-600">Account Name:</span> {companyName}</p>
-                  <p><span className="font-semibold text-slate-600">Account Number:</span> <span className="font-mono font-bold text-slate-900">30790400000335</span></p>
-                  <p><span className="font-semibold text-slate-600">IFSC Code:</span> <span className="font-mono">BARB0BANNER</span></p>
-                  <p className="text-[10px] text-slate-500">Bank Address: Bannerghatta Main Road, Bangalore - 560083</p>
+                  <p><span className="font-semibold text-slate-600">Account Number (A/C No.):</span> <span className="font-mono font-bold text-slate-900">917020066771387</span></p>
+                  <p><span className="font-semibold text-slate-600">IFSC Code:</span> <span className="font-mono">UTIB0001136</span></p>
                 </div>
 
                 <div>
