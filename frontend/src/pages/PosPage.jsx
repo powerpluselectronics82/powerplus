@@ -17,6 +17,8 @@ import {
   Split,
   CheckCircle,
   AlertCircle,
+  AlertTriangle,
+  X,
   Receipt,
   UserCheck,
   Phone,
@@ -65,6 +67,9 @@ export const PosPage = () => {
     totals,
     isInvoiceOpen,
     setIsInvoiceOpen,
+    notification,
+    notify,
+    clearNotification,
   } = useCart();
 
   // Redux Cached Branch Products
@@ -124,17 +129,47 @@ export const PosPage = () => {
       (u) => !inCartForThisProduct.includes(u.serialNumber)
     );
 
-    const stock = product.isSerialized
-      ? unselectedSerialUnits.length
-      : (product.stock ?? product.availableStock ?? product.Stock ?? product.quantity ?? 0);
-
-    if (stock <= 0) return;
-
     if (product.isSerialized) {
+      if (unselectedSerialUnits.length <= 0) {
+        notify(
+          `All ${availableSerialUnits.length} available serialized unit(s) of "${product.name}" are already in the cart.`,
+          'warning',
+          'Units in Cart'
+        );
+        return;
+      }
       setPendingSerialProduct(product);
       setSerialInput('');
       setSerialError('');
     } else {
+      const totalStock = Number(
+        product.stock ?? product.availableStock ?? product.Stock ?? product.quantity ?? 0
+      );
+
+      if (totalStock <= 0) {
+        notify(`"${product.name}" is currently out of stock.`, 'warning', 'Out of Stock');
+        return;
+      }
+
+      const productMrp = Number(product.mrp || 0);
+      const inCartCount = items
+        .filter(
+          (i) =>
+            i.product._id === product._id &&
+            !i.serialNumber &&
+            Number(i.product.mrp || 0) === productMrp
+        )
+        .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+      if (inCartCount >= totalStock) {
+        notify(
+          `Cannot add more. Stock limit (${totalStock}) reached for "${product.name}". You already have ${inCartCount} in your cart.`,
+          'warning',
+          'Stock Limit Exceeded'
+        );
+        return;
+      }
+
       addItemByProduct(product, 1);
     }
   };
@@ -242,7 +277,30 @@ export const PosPage = () => {
         setSerialInput('');
         setSerialError('');
       } else if (localBarcodeMatches.length === 1) {
-        addItemByProduct(localBarcodeMatches[0], 1);
+        const prod = localBarcodeMatches[0];
+        const totalStock = Number(
+          prod.stock ?? prod.availableStock ?? prod.Stock ?? prod.quantity ?? 0
+        );
+        const inCartCount = items
+          .filter(
+            (i) =>
+              i.product._id === prod._id &&
+              !i.serialNumber &&
+              Number(i.product.mrp || 0) === Number(prod.mrp || 0)
+          )
+          .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+        if (totalStock <= 0) {
+          notify(`"${prod.name}" is currently out of stock.`, 'warning', 'Out of Stock');
+        } else if (inCartCount >= totalStock) {
+          notify(
+            `Cannot add more. Stock limit (${totalStock}) reached for "${prod.name}". Already have ${inCartCount} in cart.`,
+            'warning',
+            'Stock Limit Exceeded'
+          );
+        } else {
+          addItemByProduct(prod, 1);
+        }
       } else {
         // Multiple price tiers (different MRPs) exist for this non-serialized product barcode
         setPendingPriceGroup(localBarcodeMatches);
@@ -278,7 +336,29 @@ export const PosPage = () => {
           setSerialInput('');
           setSerialError('');
         } else {
-          addItemByProduct(productToAdd, 1);
+          const totalStock = Number(
+            productToAdd.stock ?? productToAdd.availableStock ?? productToAdd.Stock ?? productToAdd.quantity ?? 0
+          );
+          const inCartCount = items
+            .filter(
+              (i) =>
+                i.product._id === productToAdd._id &&
+                !i.serialNumber &&
+                Number(i.product.mrp || 0) === Number(productToAdd.mrp || 0)
+            )
+            .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+          if (totalStock <= 0) {
+            notify(`"${productToAdd.name}" is currently out of stock.`, 'warning', 'Out of Stock');
+          } else if (inCartCount >= totalStock) {
+            notify(
+              `Cannot add more. Stock limit (${totalStock}) reached for "${productToAdd.name}". Already have ${inCartCount} in cart.`,
+              'warning',
+              'Stock Limit Exceeded'
+            );
+          } else {
+            addItemByProduct(productToAdd, 1);
+          }
         }
         setBarcodeInput('');
         return;
@@ -375,7 +455,41 @@ export const PosPage = () => {
   });
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-6rem)]">
+    <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-6rem)]">
+      {/* Floating Notification Toast */}
+      {notification && (
+        <div className="fixed top-6 right-6 z-50 max-w-md w-full px-4 animate-in slide-in-from-top-3 fade-in duration-200 pointer-events-auto">
+          <div
+            className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-md ${
+              notification.type === 'error'
+                ? 'bg-rose-50/95 border-rose-300 text-rose-900 shadow-rose-500/10'
+                : 'bg-amber-50/95 border-amber-300 text-amber-900 shadow-amber-500/10'
+            }`}
+          >
+            <AlertTriangle
+              className={`w-5 h-5 shrink-0 mt-0.5 ${
+                notification.type === 'error' ? 'text-rose-600' : 'text-amber-600'
+              }`}
+            />
+            <div className="flex-1">
+              <h4 className="font-extrabold text-xs uppercase tracking-wide">
+                {notification.title || 'Stock Notice'}
+              </h4>
+              <p className="text-xs font-semibold mt-0.5 leading-snug">
+                {notification.message}
+              </p>
+            </div>
+            <button
+              onClick={clearNotification}
+              className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition-colors"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Left Column: Product Search & Grid (7 Cols) */}
       <div className="lg:col-span-7 flex flex-col space-y-4 h-full">
         {/* Barcode & Search Header */}
@@ -448,22 +562,39 @@ export const PosPage = () => {
                   (u) => !inCartForThisProduct.includes(u.serialNumber)
                 );
 
-                const stock = product.isSerialized
-                  ? unselectedSerialUnits.length
-                  : (product.stock ?? product.availableStock ?? product.Stock ?? product.quantity ?? 0);
+                const totalStock = product.isSerialized
+                  ? availableSerialUnits.length
+                  : Number(product.stock ?? product.availableStock ?? product.Stock ?? product.quantity ?? 0);
+
+                const inCartCount = product.isSerialized
+                  ? inCartForThisProduct.length
+                  : items
+                    .filter(
+                      (i) =>
+                        i.product._id === product._id &&
+                        !i.serialNumber &&
+                        Number(i.product.mrp || 0) === Number(product.mrp || 0)
+                    )
+                    .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+                const availableToSelect = Math.max(0, totalStock - inCartCount);
+                const isOutOfStock = totalStock <= 0;
+                const isMaxInCart = !isOutOfStock && inCartCount >= totalStock;
 
                 const price = getProductPrice(product);
                 const mrp = Number(product.mrp || 0);
-                const isOutOfStock = stock <= 0;
 
                 return (
                   <div
                     key={`${product._id || product.barcode || 'prod'}_${index}`}
                     onClick={() => handleSelectProduct(product)}
-                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${isOutOfStock
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
+                      isOutOfStock
                         ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
+                        : isMaxInCart
+                        ? 'bg-amber-50/40 border-amber-200/80 hover:border-amber-400'
                         : 'bg-white border-slate-200/80 hover:border-indigo-500 hover:shadow-md hover:-translate-y-0.5'
-                      }`}
+                    }`}
                   >
                     <div>
                       <div className="flex justify-between items-start mb-1 gap-1">
@@ -477,12 +608,25 @@ export const PosPage = () => {
                             </span>
                           )}
                           <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${stock <= (product.minStockLevel || 5)
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                              isOutOfStock
+                                ? 'bg-rose-100 text-rose-700'
+                                : isMaxInCart
+                                ? 'bg-amber-100 text-amber-800'
+                                : inCartCount > 0
+                                ? 'bg-indigo-100 text-indigo-700'
+                                : totalStock <= (product.minStockLevel || 5)
                                 ? 'bg-amber-100 text-amber-700'
                                 : 'bg-emerald-100 text-emerald-700'
-                              }`}
+                            }`}
                           >
-                            {stock} available
+                            {isOutOfStock
+                              ? 'Out of stock'
+                              : isMaxInCart
+                              ? `Max in cart (${inCartCount}/${totalStock})`
+                              : inCartCount > 0
+                              ? `${availableToSelect} left (${inCartCount} in cart)`
+                              : `${totalStock} available`}
                           </span>
                         </div>
                       </div>
@@ -510,8 +654,16 @@ export const PosPage = () => {
                         )}
                       </div>
                       <button
-                        disabled={isOutOfStock}
-                        className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-colors"
+                        type="button"
+                        disabled={isOutOfStock || isMaxInCart}
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                          isMaxInCart
+                            ? 'bg-amber-100 text-amber-600 opacity-60 cursor-not-allowed'
+                            : isOutOfStock
+                            ? 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
+                            : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white'
+                        }`}
+                        title={isMaxInCart ? 'Maximum available stock already in cart' : 'Add to cart'}
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -587,6 +739,15 @@ export const PosPage = () => {
               ) : (
                 items.map(({ product, unit, serialNumber }, index) => {
                   const itemKey = serialNumber ? `${product._id}_${serialNumber}` : `${product._id}_${index}`;
+                  const itemMaxStock = Number(
+                    product.stock ??
+                    product.availableStock ??
+                    product.Stock ??
+                    product.quantity ??
+                    Infinity
+                  );
+                  const isAtMaxStock = !product.isSerialized && unit >= itemMaxStock;
+
                   return (
                     <div
                       key={itemKey}
@@ -601,17 +762,26 @@ export const PosPage = () => {
                             S/N: {serialNumber}
                           </span>
                         )}
-                        <span className="font-mono text-slate-500 block text-[11px]">
-                          ₹{getProductPrice(product).toFixed(2)} × {unit}
-                        </span>
+                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
+                          <span>₹{getProductPrice(product).toFixed(2)} × {unit}</span>
+                          {!product.isSerialized && Number.isFinite(itemMaxStock) && (
+                            <span className={`text-[10px] px-1 rounded font-sans font-semibold ${
+                              isAtMaxStock ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-200/70'
+                            }`}>
+                              Stock: {itemMaxStock}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-2">
                         {!product.isSerialized && (
                           <div className="flex items-center bg-white border border-slate-200 rounded-lg">
                             <button
+                              type="button"
                               onClick={() => updateQuantity(product._id, unit - 1, product.mrp)}
                               className="p-1 hover:bg-slate-100 text-slate-600"
+                              title="Decrease quantity"
                             >
                               <Minus className="w-3 h-3" />
                             </button>
@@ -619,8 +789,24 @@ export const PosPage = () => {
                               {unit}
                             </span>
                             <button
-                              onClick={() => updateQuantity(product._id, unit + 1, product.mrp)}
-                              className="p-1 hover:bg-slate-100 text-slate-600"
+                              type="button"
+                              onClick={() => {
+                                if (unit >= itemMaxStock) {
+                                  notify(
+                                    `Cannot add more. Stock limit (${itemMaxStock}) reached for "${product.name}".`,
+                                    'warning',
+                                    'Stock Limit Exceeded'
+                                  );
+                                  return;
+                                }
+                                updateQuantity(product._id, unit + 1, product.mrp);
+                              }}
+                              className={`p-1 text-slate-600 ${
+                                isAtMaxStock
+                                  ? 'opacity-40 cursor-not-allowed hover:bg-transparent'
+                                  : 'hover:bg-slate-100'
+                              }`}
+                              title={isAtMaxStock ? `Stock limit (${itemMaxStock}) reached` : 'Increase quantity'}
                             >
                               <Plus className="w-3 h-3" />
                             </button>
@@ -628,8 +814,10 @@ export const PosPage = () => {
                         )}
 
                         <button
+                          type="button"
                           onClick={() => removeItem(product._id, serialNumber, product.mrp)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                          title="Remove item"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -1064,16 +1252,43 @@ export const PosPage = () => {
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {pendingPriceGroup.map((item, idx) => {
                 const price = getProductPrice(item);
-                const isOutOfStock = (item.stock ?? 0) <= 0;
+                const inCartForTier = items
+                  .filter(
+                    (i) =>
+                      i.product._id === item._id &&
+                      !i.serialNumber &&
+                      Number(i.product.mrp || 0) === Number(item.mrp || 0)
+                  )
+                  .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+                const tierStock = Number(item.stock ?? 0);
+                const isOutOfStock = tierStock <= 0;
+                const isMaxInCart = !isOutOfStock && inCartForTier >= tierStock;
+
                 return (
                   <button
                     key={`${item.branchInventoryId || item._id}_${idx}`}
+                    type="button"
                     disabled={isOutOfStock}
                     onClick={() => {
+                      if (isMaxInCart) {
+                        notify(
+                          `Cannot add more. Stock limit (${tierStock}) reached for "${item.name}" at MRP ₹${item.mrp}. Already have ${inCartForTier} in cart.`,
+                          'warning',
+                          'Stock Limit Exceeded'
+                        );
+                        return;
+                      }
                       addItemByProduct(item, 1);
                       setPendingPriceGroup(null);
                     }}
-                    className="w-full text-left p-3 rounded-2xl bg-slate-50 border border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50 transition-all flex items-center justify-between disabled:opacity-50"
+                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between ${
+                      isOutOfStock
+                        ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
+                        : isMaxInCart
+                        ? 'bg-amber-50/70 border-amber-300 hover:border-amber-400'
+                        : 'bg-slate-50 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50'
+                    }`}
                   >
                     <div>
                       <div className="font-extrabold text-slate-900 text-xs">
@@ -1088,8 +1303,18 @@ export const PosPage = () => {
                         )}
                       </div>
                     </div>
-                    <span className="text-xs font-bold text-indigo-600 bg-white px-2.5 py-1 rounded-xl border border-slate-200">
-                      {item.stock} Available
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${
+                      isOutOfStock
+                        ? 'text-rose-600 bg-rose-50 border-rose-200'
+                        : isMaxInCart
+                        ? 'text-amber-800 bg-amber-100 border-amber-200'
+                        : 'text-indigo-600 bg-white border-slate-200'
+                    }`}>
+                      {isOutOfStock
+                        ? 'Out of Stock'
+                        : isMaxInCart
+                        ? `Max in cart (${inCartForTier}/${tierStock})`
+                        : `${tierStock} Available`}
                     </span>
                   </button>
                 );
