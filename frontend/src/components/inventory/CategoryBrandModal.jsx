@@ -20,6 +20,7 @@ export const CategoryBrandModal = ({ isOpen, onClose, onRefresh }) => {
     (state) => state.products
   );
   const [activeTab, setActiveTab] = useState('category'); // 'category' | 'brand'
+  const loading = activeTab === 'category' ? Boolean(categoriesLoading) : Boolean(brandsLoading);
   const [saveLoading, setSaveLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
