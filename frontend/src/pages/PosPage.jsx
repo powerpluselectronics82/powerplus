@@ -381,8 +381,7 @@ export const PosPage = () => {
         {/* Barcode & Search Header */}
         <div className="tactile-card p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-              <Barcode className="w-4 h-4 text-indigo-600" />
+            <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">
               Quick Barcode / Serial Scanner
             </span>
             <span className="px-3 py-0.5 rounded-full bg-amber-400 text-black border border-amber-500 font-black text-xs shadow-sm">
@@ -691,57 +690,48 @@ export const PosPage = () => {
 
                 <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <label className="text-[10px] font-bold text-slate-600 flex items-center gap-1 mb-1">
-                      <Banknote className="w-3 h-3 text-emerald-600" /> Cash
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                      Cash (₹)
                     </label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={splitAmounts.cash}
-                        onChange={(e) => setSplitAmounts(prev => ({ ...prev, cash: e.target.value }))}
-                        placeholder="0.00"
-                        className="input-tactile pl-6 text-xs font-mono font-bold py-1.5 w-full bg-white"
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={splitAmounts.cash}
+                      onChange={(e) => setSplitAmounts(prev => ({ ...prev, cash: e.target.value }))}
+                      placeholder="0.00"
+                      className="input-tactile px-3 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                    />
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-slate-600 flex items-center gap-1 mb-1">
-                      <CreditCard className="w-3 h-3 text-blue-600" /> Card
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                      Card (₹)
                     </label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={splitAmounts.card}
-                        onChange={(e) => setSplitAmounts(prev => ({ ...prev, card: e.target.value }))}
-                        placeholder="0.00"
-                        className="input-tactile pl-6 text-xs font-mono font-bold py-1.5 w-full bg-white"
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={splitAmounts.card}
+                      onChange={(e) => setSplitAmounts(prev => ({ ...prev, card: e.target.value }))}
+                      placeholder="0.00"
+                      className="input-tactile px-3 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                    />
                   </div>
 
                   <div>
-                    <label className="text-[10px] font-bold text-slate-600 flex items-center gap-1 mb-1">
-                      <QrCode className="w-3 h-3 text-purple-600" /> UPI/QR
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                      UPI/QR (₹)
                     </label>
-                    <div className="relative">
-                      <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={splitAmounts.upi}
-                        onChange={(e) => setSplitAmounts(prev => ({ ...prev, upi: e.target.value }))}
-                        placeholder="0.00"
-                        className="input-tactile pl-6 text-xs font-mono font-bold py-1.5 w-full bg-white"
-                      />
-                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={splitAmounts.upi}
+                      onChange={(e) => setSplitAmounts(prev => ({ ...prev, upi: e.target.value }))}
+                      placeholder="0.00"
+                      className="input-tactile px-3 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                    />
                   </div>
                 </div>
 
@@ -811,10 +801,7 @@ export const PosPage = () => {
                   </div>
                 </div>
 
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
-                    ₹
-                  </span>
+                <div>
                   <input
                     type="number"
                     step="0.01"
@@ -825,7 +812,7 @@ export const PosPage = () => {
                       setIsCustomPaid(true);
                       setPaidAmountInput(e.target.value);
                     }}
-                    className="input-tactile pl-7 text-xs font-mono font-bold py-1.5"
+                    className="input-tactile px-3 text-xs font-mono font-bold py-1.5"
                     placeholder="Paid amount"
                   />
                 </div>

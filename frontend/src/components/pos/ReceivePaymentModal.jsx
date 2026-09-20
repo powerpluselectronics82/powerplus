@@ -145,10 +145,7 @@ export const ReceivePaymentModal = ({
                 Pay Full Due (₹{dueAmount.toFixed(2)})
               </button>
             </div>
-            <div className="relative">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">
-                ₹
-              </span>
+            <div>
               <input
                 type="number"
                 step="0.01"
@@ -158,7 +155,7 @@ export const ReceivePaymentModal = ({
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 placeholder={`Max: ${dueAmount.toFixed(2)}`}
-                className={`input-tactile pl-8 text-sm font-mono font-bold ${
+                className={`input-tactile px-3.5 text-sm font-mono font-bold ${
                   isOverpaying ? 'border-rose-500 ring-1 ring-rose-500' : ''
                 }`}
               />
