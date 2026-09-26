@@ -32,6 +32,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { productService } from '../../services/productService';
+import { useAuth } from '../../context/AuthContext';
 import { useBranch } from '../../context/BranchContext';
 import { useAppDispatch, useAppSelector } from '../../redux/hooks';
 import {
@@ -44,10 +45,35 @@ import {
 
 export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
   const dispatch = useAppDispatch();
+  const { user, role } = useAuth();
+  const { selectedBranchId, currentBranch, branches: contextBranches } = useBranch();
+  const reduxBranches = useAppSelector((state) => state.branches?.branches || []);
+
+  // Compute effective branches combining Context, Redux, and user.branchId fallback
+  const branches = (() => {
+    const map = new Map();
+    (contextBranches || []).forEach((b) => b && b._id && map.set(String(b._id), b));
+    (reduxBranches || []).forEach(
+      (b) => b && b._id && !map.has(String(b._id)) && map.set(String(b._id), b)
+    );
+    if (currentBranch && currentBranch._id && !map.has(String(currentBranch._id))) {
+      map.set(String(currentBranch._id), currentBranch);
+    }
+    if (user?.branchId && !map.has(String(user.branchId))) {
+      map.set(String(user.branchId), {
+        _id: user.branchId,
+        name: currentBranch?.name || user.branchName || 'Assigned Branch',
+        code: currentBranch?.code || 'MAIN',
+      });
+    }
+    return Array.from(map.values());
+  })();
+
+  const isOwner = !role || role.toUpperCase() === 'OWNER' || role.toUpperCase() === 'ADMIN';
+
   const { catalogProducts, categories: reduxCategories, brands: reduxBrands } = useAppSelector(
     (state) => state.products
   );
-  const { selectedBranchId, currentBranch, branches } = useBranch();
 
   // Active lookup & detection states
   const [query, setQuery] = useState('');
@@ -109,7 +135,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     },
 
     // Stock Intake details
-    branchId: selectedBranchId || currentBranch?._id || '',
+    branchId: user?.branchId || selectedBranchId || currentBranch?._id || '',
     quantity: 1,
     purchasePrice: 0,
     serialNumbers: [''],
@@ -148,12 +174,16 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
   // Sync default branch
   useEffect(() => {
-    const defaultBranchId = selectedBranchId || currentBranch?._id || (branches?.[0]?._id ?? '');
+    const defaultBranchId =
+      user?.branchId ||
+      selectedBranchId ||
+      currentBranch?._id ||
+      (branches?.[0]?._id ?? '');
     setFormData((prev) => ({
       ...prev,
       branchId: prev.branchId || defaultBranchId,
     }));
-  }, [selectedBranchId, currentBranch, branches]);
+  }, [user, selectedBranchId, currentBranch, branches]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -176,7 +206,11 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     setBulkSerialText('');
     setSpecsActiveTab('general');
 
-    const defaultBranchId = selectedBranchId || currentBranch?._id || (branches?.[0]?._id ?? '');
+    const defaultBranchId =
+      user?.branchId ||
+      selectedBranchId ||
+      currentBranch?._id ||
+      (branches?.[0]?._id ?? '');
     setFormData({
       barcode: '',
       name: '',
@@ -420,7 +454,12 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     setError('');
     setSuccessMsg('');
 
-    const targetBranchId = formData.branchId || selectedBranchId || currentBranch?._id;
+    const targetBranchId =
+      formData.branchId ||
+      user?.branchId ||
+      selectedBranchId ||
+      currentBranch?._id ||
+      branches[0]?._id;
     if (!targetBranchId) {
       setError('Please select a target branch for stock intake');
       return;
@@ -1288,21 +1327,66 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
             {/* Target Branch Selector */}
             <div className="space-y-1.5">
-              <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                Target Branch for Intake <span className="text-rose-500">*</span>
-              </label>
-              <select
-                value={formData.branchId}
-                onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value }))}
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-bold text-slate-900"
-              >
-                {(branches || []).map((b) => (
-                  <option key={b._id} value={b._id}>
-                    {b.name} ({b.code || 'Main'})
-                  </option>
-                ))}
-              </select>
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  Target Branch for Intake <span className="text-rose-500">*</span>
+                </label>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {isOwner && branches.length > 1 ? 'Select Branch' : 'Assigned Branch'}
+                </span>
+              </div>
+
+              {isOwner && branches.length > 1 ? (
+                <select
+                  value={
+                    formData.branchId ||
+                    user?.branchId ||
+                    selectedBranchId ||
+                    currentBranch?._id ||
+                    branches[0]?._id ||
+                    ''
+                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value }))}
+                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-600 bg-slate-50/50 focus:bg-white outline-none text-xs font-bold text-slate-900 transition-colors"
+                >
+                  {branches.map((b) => (
+                    <option key={b._id} value={b._id}>
+                      {b.name} ({b.code || 'Main'})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-xs text-slate-900 block leading-tight">
+                        {branches.find(
+                          (b) => b._id === (formData.branchId || user?.branchId || selectedBranchId)
+                        )?.name ||
+                          currentBranch?.name ||
+                          branches[0]?.name ||
+                          'My Assigned Branch'}
+                      </span>
+                      <span className="text-[10px] font-mono text-slate-500">
+                        Code:{' '}
+                        {branches.find(
+                          (b) => b._id === (formData.branchId || user?.branchId || selectedBranchId)
+                        )?.code ||
+                          currentBranch?.code ||
+                          branches[0]?.code ||
+                          'MAIN'}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    Active Target
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Purchase Price Input */}
