@@ -18,10 +18,11 @@ import {
   Calendar,
   Printer,
   FileText,
-  TrendingUp,
   Layers,
   ChevronDown,
   ChevronRight,
+  ArrowLeft,
+  Search,
 } from 'lucide-react';
 
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
@@ -29,6 +30,7 @@ import {
   fetchBranchProducts,
   fetchCatalogProducts,
   fetchStockValuation,
+  invalidateProductCaches,
   toggleProductStatusInStore,
 } from '../redux/slices/productsSlice';
 
@@ -83,20 +85,40 @@ export const ProductsPage = () => {
   const [monthlyReportData, setMonthlyReportData] = useState(null);
   const [monthlyReportLoading, setMonthlyReportLoading] = useState(false);
   const [expandedSerials, setExpandedSerials] = useState({});
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const loadData = (force = false) => {
+  const loadData = async (force = false) => {
     const bId = selectedBranchId || currentBranch?._id;
-    if (bId) {
-      dispatch(fetchBranchProducts({ branchId: bId, force }));
+    if (force) {
+      dispatch(invalidateProductCaches());
     }
-    dispatch(fetchCatalogProducts({ force }));
-    dispatch(fetchStockValuation({ branchId: bId, force }));
+    const promises = [
+      dispatch(fetchCatalogProducts({ force })),
+      dispatch(fetchStockValuation({ branchId: bId, force })),
+    ];
+    if (bId) {
+      promises.push(dispatch(fetchBranchProducts({ branchId: bId, force })));
+    }
+    await Promise.allSettled(promises);
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await loadData(true);
+      if (tab === 'MONTHLY_REPORT' || reportMonth) {
+        await loadMonthlyReport(reportMonth);
+      }
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const loadMonthlyReport = async (targetMonth) => {
     setMonthlyReportLoading(true);
     try {
-      const res = await productService.getMonthlyInventoryReport(selectedBranchId || currentBranch?._id || '', targetMonth);
+      const bId = selectedBranchId || currentBranch?._id || '';
+      const res = await productService.getMonthlyInventoryReport(bId, targetMonth);
       if (res?.success) {
         setMonthlyReportData(res.data);
       } else {
@@ -283,10 +305,6 @@ export const ProductsPage = () => {
               <div class="stat-title">Total Purchase Valuation</div>
               <div class="stat-value">₹${monthlyReportData.totalIntakeCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             </div>
-            <div class="stat-card">
-              <div class="stat-title">Total Expected Selling</div>
-              <div class="stat-value">₹${monthlyReportData.totalSellingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-            </div>
           </div>
 
           <table>
@@ -350,9 +368,6 @@ export const ProductsPage = () => {
                 <td class="num" style="color: #047857;">${printableItems.reduce((acc, i) => acc + i.stockAdded, 0)}</td>
                 <td></td>
                 <td class="num">₹${printableItems.reduce((acc, i) => acc + i.totalPurchaseValue, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td></td>
-                <td></td>
-                <td class="num" style="color: #3730a3;">₹${printableItems.reduce((acc, i) => acc + i.totalSellingValue, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
               </tr>
             </tfoot>
           </table>
@@ -401,26 +416,38 @@ export const ProductsPage = () => {
 
         <div className="flex flex-wrap items-center gap-3">
           <button
-            onClick={() => {
-              loadData();
-              if (tab === 'MONTHLY_REPORT') loadMonthlyReport(reportMonth);
-            }}
-            className="btn-secondary py-2 px-3 text-xs"
+            onClick={handleManualRefresh}
+            disabled={isRefreshing || catalogLoading || branchLoading}
+            className="btn-secondary py-2 px-3 text-xs flex items-center gap-1.5 transition-all disabled:opacity-50 cursor-pointer"
             title="Refresh Catalog & Reports"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${
+                isRefreshing || catalogLoading || branchLoading
+                  ? 'animate-spin text-indigo-600'
+                  : ''
+              }`}
+            />
+            <span className="hidden sm:inline font-bold">Refresh</span>
           </button>
 
-          <button
-            onClick={() => {
-              setTab('MONTHLY_REPORT');
-              setIsReportModalOpen(true);
-            }}
-            className="btn-secondary py-2.5 px-3.5 text-xs font-bold border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm"
-          >
-            <FileText className="w-4 h-4 text-indigo-600" />
-            Monthly Intake Report
-          </button>
+          {tab === 'MONTHLY_REPORT' ? (
+            <button
+              onClick={() => setTab('ALL')}
+              className="btn-secondary py-2.5 px-3.5 text-xs font-bold border-slate-300 text-slate-700 bg-white hover:bg-slate-50 flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4 text-indigo-600" />
+              <span>Back to Products</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => setTab('MONTHLY_REPORT')}
+              className="btn-secondary py-2.5 px-3.5 text-xs font-bold border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-100 flex items-center gap-1.5 shadow-sm cursor-pointer"
+            >
+              <FileText className="w-4 h-4 text-indigo-600" />
+              <span>Monthly Intake Report</span>
+            </button>
+          )}
 
           {canCatBrand && (
             <button
@@ -443,8 +470,10 @@ export const ProductsPage = () => {
         </div>
       </div>
 
-      {/* Stock Valuation Summary Widget */}
-      {valuation && (
+      {/* Stock Valuation Summary Widget & Catalog Filter Bar */}
+      {tab !== 'MONTHLY_REPORT' && (
+        <>
+          {valuation && (
         <div className="tactile-card p-5 bg-black text-white border border-neutral-800 shadow-xl flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-white border border-neutral-700/80 flex items-center justify-center">
@@ -454,14 +483,14 @@ export const ProductsPage = () => {
               <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest block">
                 Total Stock Valuation
               </span>
-              <div className="text-2xl font-extrabold font-mono mt-0.5 text-black">
+              <div className="text-2xl font-extrabold font-mono mt-0.5 text-white">
                 ₹{Number(valuation.totalValue || 0).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
 
           <div className="text-right text-xs text-neutral-400">
-            <span className="font-bold block text-black">
+            <span className="font-bold block text-white">
               {products.length} Products Tracked
             </span>
             <span>Evaluated at purchase cost</span>
@@ -474,8 +503,8 @@ export const ProductsPage = () => {
         <div className="flex flex-wrap bg-slate-100 p-1 rounded-xl w-full sm:w-auto gap-1">
           {[
             { id: 'ALL', label: 'All Catalog', count: allActiveCount },
-            { id: 'MONTHLY_REPORT', label: 'Monthly Added Inventory Report', count: monthlyIntakeCount, icon: FileText },
-            { id: 'LOW_STOCK', label: 'Low Stock Alerts', count: lowStockCount },
+           // { id: 'MONTHLY_REPORT', label: 'Monthly Added Inventory Report', count: monthlyIntakeCount, icon: FileText },
+           // { id: 'LOW_STOCK', label: 'Low Stock Alerts', count: lowStockCount },
             { id: 'ARCHIVED', label: 'Archived', count: archivedCount },
           ].map((t) => {
             const Icon = t.icon;
@@ -512,20 +541,31 @@ export const ProductsPage = () => {
           />
         </div>
       </div>
+        </>
+      )}
 
-      {/* RENDER TAB 1: DEDICATED MONTHLY INVENTORY INTAKE REPORT SECTION */}
+      {/* RENDER TAB 1: DEDICATED FULL-PAGE MONTHLY INVENTORY INTAKE REPORT SECTION */}
       {tab === 'MONTHLY_REPORT' ? (
-        <div className="tactile-card p-6 space-y-5 bg-white">
+        <div className="tactile-card p-6 space-y-5 bg-white border border-slate-200 shadow-sm">
           {/* Monthly Report Controls Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-            <div>
-              <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                <FileText className="w-5 h-5 text-indigo-600" />
-                <span>Monthly Inventory Intake Report</span>
-              </h3>
-              <p className="text-xs text-slate-500 font-medium">
-                Clean inventory report of stock added during the month without generic status columns.
-              </p>
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setTab('ALL')}
+                className="btn-secondary py-1.5 px-3 text-xs font-bold flex items-center gap-1.5 text-slate-700 hover:text-indigo-600 transition-colors cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Back to Catalog</span>
+              </button>
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                  <FileText className="w-5 h-5 text-indigo-600" />
+                  <span>Monthly Inventory Intake Report</span>
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Clean inventory report of stock added during {reportMonth} without generic status columns.
+                </p>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -537,23 +577,33 @@ export const ProductsPage = () => {
                   type="month"
                   value={reportMonth}
                   onChange={(e) => setReportMonth(e.target.value)}
-                  className="text-xs font-bold font-mono text-slate-900 border-none outline-none focus:ring-0 bg-transparent"
+                  className="text-xs font-bold font-mono text-slate-900 border-none outline-none focus:ring-0 bg-transparent cursor-pointer"
                 />
               </div>
 
               {reportMonth !== currentMonthStr && (
                 <button
                   onClick={() => setReportMonth(currentMonthStr)}
-                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline transition-colors"
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline transition-colors cursor-pointer"
                 >
                   Current Month
                 </button>
               )}
 
               <button
+                onClick={() => loadMonthlyReport(reportMonth)}
+                disabled={monthlyReportLoading}
+                className="btn-secondary py-2 px-3 text-xs flex items-center gap-1.5 font-bold transition-all disabled:opacity-50 cursor-pointer"
+                title="Refresh Month Report"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${monthlyReportLoading ? 'animate-spin text-indigo-600' : ''}`} />
+                <span>Refresh Month</span>
+              </button>
+
+              <button
                 onClick={handlePrintMonthlyReport}
                 disabled={!monthlyReportData || filteredMonthlyItems.length === 0}
-                className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                className="btn-primary py-2 px-4 text-xs font-bold flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>Print Monthly Report</span>
@@ -561,9 +611,26 @@ export const ProductsPage = () => {
             </div>
           </div>
 
+          {/* Search bar inside Monthly Report */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search monthly intake by product, barcode, serial, brand..."
+                className="input-tactile text-xs pl-9 pr-3.5 py-2 w-full"
+              />
+            </div>
+            <div className="text-xs font-medium text-slate-500">
+              Showing <span className="font-bold text-slate-900">{filteredMonthlyItems.length}</span> record{filteredMonthlyItems.length === 1 ? '' : 's'}
+            </div>
+          </div>
+
           {/* Report Summary Cards */}
           {monthlyReportData && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-3 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 flex items-center gap-3 shadow-sm">
                 <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
                   <Boxes className="w-5 h-5" />
@@ -593,16 +660,6 @@ export const ProductsPage = () => {
                   <span className="text-base font-extrabold font-mono text-slate-900">₹{monthlyReportData.totalIntakeCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                 </div>
               </div>
-
-              <div className="p-3 bg-gradient-to-br from-sky-50 to-white rounded-2xl border border-sky-100 flex items-center gap-3 shadow-sm">
-                <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-sky-600/80 uppercase tracking-wider block">Expected Selling</span>
-                  <span className="text-base font-extrabold font-mono text-indigo-700">₹{monthlyReportData.totalSellingValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-                </div>
-              </div>
             </div>
           )}
 
@@ -628,8 +685,6 @@ export const ProductsPage = () => {
                     <th>Units Added</th>
                     <th>Buy Price (Cost)</th>
                     <th>Total Purchase Cost</th>
-                    <th>Selling Price</th>
-                    <th>Total Selling Value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -683,18 +738,12 @@ export const ProductsPage = () => {
                           <td className="font-mono text-xs font-extrabold text-slate-900">
                             ₹{Number(item.totalPurchaseValue || 0).toFixed(2)}
                           </td>
-                          <td className="font-mono text-xs text-indigo-600 font-medium">
-                            ₹{Number(item.sellingPrice || 0).toFixed(2)}
-                          </td>
-                          <td className="font-mono text-xs font-extrabold text-indigo-700">
-                            ₹{Number(item.totalSellingValue || 0).toFixed(2)}
-                          </td>
                         </tr>
 
                         {/* Serial Numbers Breakdown Sub-Row */}
                         {hasSerials && (isExpanded || search.trim().length > 0) && (
                           <tr className="bg-indigo-50/40">
-                            <td colSpan="9" className="p-3 pl-10">
+                            <td colSpan="7" className="p-3 pl-10">
                               <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm space-y-2">
                                 <div className="flex items-center justify-between text-xs font-bold text-indigo-900 border-b border-indigo-50 pb-1.5">
                                   <span className="uppercase tracking-wider text-[10px] text-indigo-600">
@@ -934,7 +983,7 @@ export const ProductsPage = () => {
         <UnifiedStockIntakeModal
           isOpen={isUnifiedIntakeOpen}
           onClose={() => setIsUnifiedIntakeOpen(false)}
-          onRefresh={loadData}
+          onRefresh={() => loadData(true)}
         />
       )}
 
@@ -942,21 +991,21 @@ export const ProductsPage = () => {
       <AddProductModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        onRefresh={loadData}
+        onRefresh={() => loadData(true)}
       />
 
       {/* Add Branch Stock Intake Modal */}
       <AddStockModal
         isOpen={isAddStockModalOpen}
         onClose={() => setIsAddStockModalOpen(false)}
-        onRefresh={loadData}
+        onRefresh={() => loadData(true)}
       />
 
       {/* Category & Brand Master Modal */}
       <CategoryBrandModal
         isOpen={isCatBrandModalOpen}
         onClose={() => setIsCatBrandModalOpen(false)}
-        onRefresh={loadData}
+        onRefresh={() => loadData(true)}
       />
 
       {/* Monthly Added Inventory Report Modal */}

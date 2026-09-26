@@ -16,7 +16,8 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  Tag
+  Tag,
+  RefreshCw,
 } from 'lucide-react';
 import { CreatePurchaseModal } from '../components/inventory/CreatePurchaseModal';
 import { PurchaseInvoiceModal } from '../components/inventory/PurchaseInvoiceModal';
@@ -34,6 +35,7 @@ export const PurchasesPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -41,6 +43,22 @@ export const PurchasesPage = () => {
   const loadPurchases = (force = false) => {
     const bId = (role === 'OWNER' && !selectedBranchId) ? null : (selectedBranchId || currentBranch?._id);
     dispatch(fetchPurchases({ branchId: bId, force }));
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      dispatch(invalidatePurchasesCache());
+      dispatch(invalidateProductCaches());
+      const bId = (role === 'OWNER' && !selectedBranchId) ? null : (selectedBranchId || currentBranch?._id);
+      await Promise.allSettled([
+        dispatch(fetchPurchases({ branchId: bId, force: true })),
+        dispatch(fetchSuppliers({ force: true })),
+        dispatch(fetchCatalogProducts({ force: true })),
+      ]);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   useEffect(() => {
@@ -122,12 +140,24 @@ export const PurchasesPage = () => {
           </div>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="tactile-btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold px-5 py-2.5 shadow-md flex items-center gap-2"
-        >
-          <Plus className="w-4 h-4" /> Receive Stock (New Invoice)
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleManualRefresh}
+            disabled={isRefreshing || loading}
+            className="btn-secondary py-2.5 px-3 text-xs flex items-center gap-1.5 font-bold transition-all disabled:opacity-50 cursor-pointer"
+            title="Refresh Purchase Logs"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing || loading ? 'animate-spin text-indigo-600' : ''}`} />
+            <span className="hidden sm:inline">Refresh</span>
+          </button>
+
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="tactile-btn bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold px-5 py-2.5 shadow-md flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" /> Receive Stock (New Invoice)
+          </button>
+        </div>
       </div>
 
       {/* Summary KPI Analytics Cards */}

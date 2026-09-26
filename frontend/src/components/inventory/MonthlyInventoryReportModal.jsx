@@ -6,7 +6,6 @@ import {
   FileText,
   Boxes,
   DollarSign,
-  TrendingUp,
   X,
   Search,
   RefreshCw,
@@ -27,7 +26,8 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
   const fetchReport = async (targetMonth) => {
     setLoading(true);
     try {
-      const res = await productService.getMonthlyInventoryReport(selectedBranchId || '', targetMonth);
+      const bId = selectedBranchId || currentBranch?._id || '';
+      const res = await productService.getMonthlyInventoryReport(bId, targetMonth);
       if (res?.success) {
         setReportData(res.data);
       } else {
@@ -45,7 +45,7 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
     if (isOpen) {
       fetchReport(month);
     }
-  }, [isOpen, month, selectedBranchId]);
+  }, [isOpen, month, selectedBranchId, currentBranch?._id]);
 
   if (!isOpen) return null;
 
@@ -152,10 +152,6 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
             <div class="stat-card">
               <div class="stat-title">Total Purchase Valuation</div>
               <div class="stat-value">₹${reportData.totalIntakeCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-title">Total Expected Selling</div>
-              <div class="stat-value">₹${reportData.totalSellingValue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</div>
             </div>
           </div>
 
@@ -333,7 +329,7 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
 
         {/* Summary Widgets */}
         {reportData && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div className="p-3 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 flex items-center gap-3 shadow-sm">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
                 <Boxes className="w-5 h-5" />
@@ -363,16 +359,6 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                 <span className="text-base font-extrabold font-mono text-slate-900">₹{reportData.totalIntakeCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
               </div>
             </div>
-
-            <div className="p-3 bg-gradient-to-br from-sky-50 to-white rounded-2xl border border-sky-100 flex items-center gap-3 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 text-sky-600 flex items-center justify-center">
-                <TrendingUp className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-sky-600/80 uppercase tracking-wider block">Expected Selling</span>
-                <span className="text-base font-extrabold font-mono text-indigo-700">₹{reportData.totalSellingValue.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-              </div>
-            </div>
           </div>
         )}
 
@@ -398,8 +384,6 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                   <th>Units Added</th>
                   <th>Buy Price (Cost)</th>
                   <th>Total Purchase Cost</th>
-                  <th>Selling Price</th>
-                  <th>Total Selling Value</th>
                 </tr>
               </thead>
               <tbody>
@@ -453,18 +437,12 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                         <td className="font-mono text-xs font-extrabold text-slate-900">
                           ₹{Number(item.totalPurchaseValue || 0).toFixed(2)}
                         </td>
-                        <td className="font-mono text-xs text-indigo-600 font-medium">
-                          ₹{Number(item.sellingPrice || 0).toFixed(2)}
-                        </td>
-                        <td className="font-mono text-xs font-extrabold text-indigo-700">
-                          ₹{Number(item.totalSellingValue || 0).toFixed(2)}
-                        </td>
                       </tr>
 
                       {/* Serial Numbers Breakdown Sub-Row */}
                       {hasSerials && (isExpanded || searchQuery.trim().length > 0) && (
                         <tr className="bg-indigo-50/40">
-                          <td colSpan="9" className="p-3 pl-10">
+                          <td colSpan="7" className="p-3 pl-10">
                             <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm space-y-2">
                               <div className="flex items-center justify-between text-xs font-bold text-indigo-900 border-b border-indigo-50 pb-1.5">
                                 <span className="uppercase tracking-wider text-[10px] text-indigo-600">
