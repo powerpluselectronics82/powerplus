@@ -8,6 +8,7 @@ export const CartProvider = ({ children }) => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerGstin, setCustomerGstin] = useState('');
+  const [exchangeAmount, setExchangeAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [completedSale, setCompletedSale] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -187,6 +188,7 @@ export const CartProvider = ({ children }) => {
     setCustomerPhone('');
     setCustomerAddress('');
     setCustomerGstin('');
+    setExchangeAmount('');
     setPaymentMethod('CASH');
   };
 
@@ -248,15 +250,20 @@ export const CartProvider = ({ children }) => {
       taxableValue += tax;
     });
 
-    const grandTotal = subtotal + taxableValue;
+    const parsedExchange = Math.max(0, Number(exchangeAmount) || 0);
+    const beforeExchange = subtotal + taxableValue - totalDiscount;
+    const effectiveExchange = Math.min(parsedExchange, beforeExchange);
+    const grandTotal = Math.max(0, Number((beforeExchange - effectiveExchange).toFixed(2)));
 
     return {
       subtotal,
       totalDiscount,
       taxableValue,
+      exchangeAmount: effectiveExchange,
+      rawExchangeAmount: exchangeAmount,
       grandTotal,
     };
-  }, [items]);
+  }, [items, exchangeAmount]);
 
   return (
     <CartContext.Provider
@@ -277,6 +284,8 @@ export const CartProvider = ({ children }) => {
         setCustomerAddress,
         customerGstin,
         setCustomerGstin,
+        exchangeAmount,
+        setExchangeAmount,
         paymentMethod,
         setPaymentMethod,
         completedSale,

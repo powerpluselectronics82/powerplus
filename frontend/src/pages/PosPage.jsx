@@ -56,6 +56,8 @@ export const PosPage = () => {
     setCustomerAddress,
     customerGstin,
     setCustomerGstin,
+    exchangeAmount,
+    setExchangeAmount,
     paymentMethod,
     setPaymentMethod,
     completedSale,
@@ -401,6 +403,8 @@ export const PosPage = () => {
       customerPhone: customerPhone || '9999999999',
       customerAddress: customerAddress || '',
       customerGstin: customerGstin ? String(customerGstin).trim().toUpperCase() : '',
+      exchangeAmount: totals.exchangeAmount || 0,
+      totalDiscount: (totals.totalDiscount || 0) + (totals.exchangeAmount || 0),
       paidAmount: sanitizedPaid,
       dueAmount: calculatedDue,
       paymentStatus: calculatedStatus,
@@ -430,6 +434,8 @@ export const PosPage = () => {
         setCompletedSale({
           ...res.data,
           customerGstin: res.data?.customerGstin || payload.customerGstin,
+          exchangeAmount: res.data?.exchangeAmount || payload.exchangeAmount,
+          totalDiscount: res.data?.totalDiscount || payload.totalDiscount,
         });
         clearCart();
         setIsCustomPaid(false);
@@ -1026,6 +1032,35 @@ export const PosPage = () => {
               </div>
             )}
 
+            {/* Exchange & Offers Input */}
+            <div className="bg-amber-50/70 p-2.5 rounded-2xl border border-amber-200/90 space-y-1.5">
+              <div className="flex items-center justify-between text-xs font-bold text-amber-950">
+                <span className="flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-amber-600" />
+                  Exchange & Offers
+                </span>
+                {totals.exchangeAmount > 0 && (
+                  <span className="font-mono text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-md border border-amber-300 font-extrabold shadow-2xs">
+                    -₹{totals.exchangeAmount.toFixed(2)} Off
+                  </span>
+                )}
+              </div>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={exchangeAmount}
+                  onChange={(e) => setExchangeAmount(e.target.value)}
+                  placeholder="Enter discount / exchange amount (e.g. 500)"
+                  className="input-tactile pl-7 pr-3 text-xs font-mono font-bold py-1.5 bg-white w-full border-amber-200 focus:border-amber-500 focus:ring-amber-500/20"
+                />
+              </div>
+            </div>
+
             {/* Calculations Breakdown */}
             <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80 space-y-1.5 text-xs font-mono">
               <div className="flex justify-between text-slate-600">
@@ -1038,8 +1073,14 @@ export const PosPage = () => {
               </div>
               {totals.totalDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-bold">
-                  <span>Discount:</span>
+                  <span>Item Discount:</span>
                   <span>-₹{totals.totalDiscount.toFixed(2)}</span>
+                </div>
+              )}
+              {totals.exchangeAmount > 0 && (
+                <div className="flex justify-between text-amber-700 font-extrabold">
+                  <span>Exchange & Offers:</span>
+                  <span>-₹{totals.exchangeAmount.toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200">

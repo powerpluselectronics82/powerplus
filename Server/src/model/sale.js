@@ -160,6 +160,11 @@ const SaleSchema = new mongoose.Schema(
       default: 0,
     },
 
+    exchangeAmount: {
+      type: Number,
+      default: 0,
+    },
+
     taxableValue: {
       type: Number,
       required: true,

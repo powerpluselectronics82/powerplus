@@ -223,7 +223,8 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   const subtotal = Number(activeSale.subtotal ?? sale.subtotal ?? activeSale.grandTotal ?? sale.grandTotal ?? 0);
   const cgstTotal = Number(activeSale.cgstTotal ?? sale.cgstTotal ?? 0);
   const sgstTotal = Number(activeSale.sgstTotal ?? sale.sgstTotal ?? 0);
-  const grandTotal = Number(activeSale.grandTotal ?? sale.grandTotal ?? subtotal);
+  const totalDiscount = Number(activeSale.totalDiscount ?? sale.totalDiscount ?? activeSale.exchangeAmount ?? sale.exchangeAmount ?? 0);
+  const grandTotal = Number(activeSale.grandTotal ?? sale.grandTotal ?? Math.max(0, subtotal + cgstTotal + sgstTotal - totalDiscount));
   const paidAmount = Number(activeSale.paidAmount ?? (activeSale.paymentStatus === 'PAID' ? grandTotal : 0));
   const dueAmount = Number(activeSale.dueAmount ?? (activeSale.paymentStatus === 'PAID' ? 0 : grandTotal));
   const paymentStatus = activeSale.paymentStatus || (dueAmount <= 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'UNPAID'));
@@ -541,14 +542,24 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                       ₹{subtotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>CGST9 (9%)</span>
-                    <span>₹{cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
-                  <div className="flex justify-between text-slate-600">
-                    <span>SGST9 (9%)</span>
-                    <span>₹{sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
-                  </div>
+                  {cgstTotal > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>CGST</span>
+                      <span>₹{cgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {sgstTotal > 0 && (
+                    <div className="flex justify-between text-slate-600">
+                      <span>SGST</span>
+                      <span>₹{sgstTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
+                  {totalDiscount > 0 && (
+                    <div className="flex justify-between text-amber-700 font-bold">
+                      <span>Exchange & Offers Discount</span>
+                      <span>-₹{totalDiscount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  )}
                   <div className="border-t border-slate-800 pt-2 flex justify-between text-sm font-extrabold text-slate-900">
                     <span>Total</span>
                     <span className="text-indigo-900">

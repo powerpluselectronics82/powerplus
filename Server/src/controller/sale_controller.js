@@ -407,7 +407,12 @@ const createSale = async (req, res) => {
       }
     }
 
-    const grandTotal = subtotal + taxableValue;
+    const rawExchange = Number(req.body?.exchangeAmount || req.body?.exchangeOfferAmount || 0);
+    const extraDiscount = Number(req.body?.totalDiscount || req.body?.discount || 0);
+    const combinedDiscount = Math.max(0, totalDiscount + Math.max(0, rawExchange) + Math.max(0, extraDiscount));
+    totalDiscount = combinedDiscount;
+
+    const grandTotal = Math.max(0, Number((subtotal + taxableValue - totalDiscount).toFixed(2)));
 
     let branchQuery = Branch.findById(branchId);
     if (sessionOpt) branchQuery = branchQuery.session(sessionOpt);
@@ -493,6 +498,7 @@ const createSale = async (req, res) => {
           items: saleItems,
           subtotal,
           totalDiscount,
+          exchangeAmount: Math.max(0, Number(req.body?.exchangeAmount || req.body?.exchangeOfferAmount || 0)),
           taxableValue,
           cgstTotal,
           sgstTotal,
