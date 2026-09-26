@@ -12,31 +12,47 @@ export const BranchProvider = ({ children }) => {
 
   const fetchBranches = async () => {
     if (!user) return;
+    setLoading(true);
     try {
+      const userRole = String(user.role || '').toUpperCase().trim();
+      const isOwnerRole = userRole === 'OWNER' || userRole === 'ADMIN';
+
+      // 1. If OWNER or ADMIN, fetch full company branches list
+      if (isOwnerRole) {
+        const res = await branchService.getAllBranches();
+        if (res?.success && Array.isArray(res.data)) {
+          setBranches(res.data);
+          if (!selectedBranchId && res.data.length > 0) {
+            setSelectedBranchId(res.data[0]._id);
+          }
+          return;
+        }
+      }
+
+      // 2. If Manager or Staff with assigned branch, load their specific branch
+      if (user.branchId) {
+        setSelectedBranchId(user.branchId);
+        try {
+          const fallbackRes = await branchService.getBranchById(user.branchId);
+          if (fallbackRes?.success && fallbackRes.data) {
+            setBranches([fallbackRes.data]);
+            return;
+          }
+        } catch (singleErr) {
+          console.warn('Failed to load assigned branch by ID:', singleErr);
+        }
+      }
+
+      // 3. Fallback: attempt getAllBranches if not yet loaded
       const res = await branchService.getAllBranches();
       if (res?.success && Array.isArray(res.data)) {
         setBranches(res.data);
         if (!selectedBranchId && res.data.length > 0) {
           setSelectedBranchId(res.data[0]._id);
         }
-      } else if (user.branchId) {
-        setSelectedBranchId(user.branchId);
-        const fallbackRes = await branchService.getBranchById(user.branchId);
-        if (fallbackRes?.success && fallbackRes.data) {
-          setBranches([fallbackRes.data]);
-        }
       }
     } catch (err) {
-      if (user.branchId) {
-        try {
-          setSelectedBranchId(user.branchId);
-          const fallbackRes = await branchService.getBranchById(user.branchId);
-          if (fallbackRes?.success && fallbackRes.data) {
-            setBranches([fallbackRes.data]);
-          }
-        } catch (_) {}
-      }
-      console.error('Failed to load branches:', err);
+      console.warn('Branch loading note:', err.message || err);
     } finally {
       setLoading(false);
     }

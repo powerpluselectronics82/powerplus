@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   X,
   Boxes,
@@ -12,9 +13,23 @@ import {
   AlertCircle,
   Plus,
   RefreshCw,
-  Sliders,
-  ChevronDown,
-  ChevronUp,
+  ArrowLeft,
+  Cpu,
+  HardDrive,
+  Battery,
+  Camera,
+  Volume2,
+  Wifi,
+  ShieldCheck,
+  PhoneCall,
+  Palette,
+  Ruler,
+  Zap,
+  Monitor,
+  Info,
+  Building2,
+  DollarSign,
+  FileText,
 } from 'lucide-react';
 import { productService } from '../../services/productService';
 import { useBranch } from '../../context/BranchContext';
@@ -51,11 +66,13 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
   // Serial input mode: 'bulk' | 'individual'
   const [serialInputMode, setSerialInputMode] = useState('bulk');
   const [bulkSerialText, setBulkSerialText] = useState('');
-  const [showSpecs, setShowSpecs] = useState(false);
 
-  // Unified Form Data (No MRP, No discountType, No discountValue!)
+  // Active Technical Specs Tab
+  const [specsActiveTab, setSpecsActiveTab] = useState('general');
+
+  // Unified Form Data (No MRP, No discountType, No discountValue)
   const [formData, setFormData] = useState({
-    // Product details (used if new product)
+    // Core Product Details
     barcode: '',
     name: '',
     modelNumber: '',
@@ -68,10 +85,27 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     sgstRate: 9,
     igstRate: 0,
     minStockLevel: 2,
+
+    // Full Technical Specifications
     specifications: {
       color: '',
       warranty: '',
       tollFreeNumber: '',
+      dimensions: '',
+      weight: '',
+      powerConsumption: '',
+      voltage: '',
+      displaySize: '',
+      resolution: '',
+      ram: '',
+      storage: '',
+      batteryCapacity: '',
+      processor: '',
+      operatingSystem: '',
+      camera: '',
+      speaker: '',
+      connectivity: '',
+      features: '',
     },
 
     // Stock Intake details
@@ -80,6 +114,17 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     purchasePrice: 0,
     serialNumbers: [''],
   });
+
+  // Handle ESC key to close full-page workspace
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Load initial catalog, categories, brands on open
   useEffect(() => {
@@ -129,7 +174,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     setSuccessMsg('');
     setIsDropdownOpen(false);
     setBulkSerialText('');
-    setShowSpecs(false);
+    setSpecsActiveTab('general');
 
     const defaultBranchId = selectedBranchId || currentBranch?._id || (branches?.[0]?._id ?? '');
     setFormData({
@@ -149,6 +194,21 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         color: '',
         warranty: '',
         tollFreeNumber: '',
+        dimensions: '',
+        weight: '',
+        powerConsumption: '',
+        voltage: '',
+        displaySize: '',
+        resolution: '',
+        ram: '',
+        storage: '',
+        batteryCapacity: '',
+        processor: '',
+        operatingSystem: '',
+        camera: '',
+        speaker: '',
+        connectivity: '',
+        features: '',
       },
       branchId: defaultBranchId,
       quantity: 1,
@@ -174,7 +234,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     setIsDropdownOpen(true);
 
     // Exact match check against local catalog
-    const exactMatch = catalogProducts.find(
+    const exactMatch = (catalogProducts || []).find(
       (p) =>
         String(p.barcode || '').trim().toLowerCase() === clean.toLowerCase() ||
         String(p.modelNumber || '').trim().toLowerCase() === clean.toLowerCase()
@@ -203,8 +263,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
       setLookupLoading(true);
       setError('');
       try {
-        // First check catalogProducts
-        const match = catalogProducts.find(
+        const match = (catalogProducts || []).find(
           (p) =>
             String(p.barcode || '').trim().toLowerCase() === clean.toLowerCase() ||
             String(p.modelNumber || '').trim().toLowerCase() === clean.toLowerCase()
@@ -213,12 +272,10 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         if (match) {
           applyExistingProduct(match);
         } else {
-          // Check backend API by barcode
           const res = await productService.getProductByBarcode(clean);
           if (res?.success && res?.data) {
             applyExistingProduct(res.data);
           } else {
-            // New product detected
             setSelectedProduct(null);
             setIsExistingProduct(false);
             setFormData((prev) => ({
@@ -228,7 +285,6 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
           }
         }
       } catch {
-        // Not found on backend -> new product
         setSelectedProduct(null);
         setIsExistingProduct(false);
         setFormData((prev) => ({
@@ -247,18 +303,45 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     setIsDropdownOpen(false);
     setQuery(`${prod.name} (${prod.barcode})`);
 
+    const specs = prod.specifications || {};
     setFormData((prev) => ({
       ...prev,
       barcode: prod.barcode,
       name: prod.name,
       modelNumber: prod.modelNumber || '',
       hsnCode: prod.hsnCode || '',
+      description: prod.description || '',
       category: prod.category || '',
       brand: prod.brand || '',
       isSerialized: prod.isSerialized || false,
-      cgstRate: prod.cgstRate || 9,
-      sgstRate: prod.sgstRate || 9,
-      igstRate: prod.igstRate || 0,
+      cgstRate: prod.cgstRate !== undefined ? prod.cgstRate : 9,
+      sgstRate: prod.sgstRate !== undefined ? prod.sgstRate : 9,
+      igstRate: prod.igstRate !== undefined ? prod.igstRate : 0,
+      minStockLevel: prod.minStockLevel || 2,
+      specifications: {
+        color: specs.color || '',
+        warranty: specs.warranty || '',
+        tollFreeNumber: specs.tollFreeNumber || '',
+        dimensions: specs.dimensions || '',
+        weight: specs.weight || '',
+        powerConsumption: specs.powerConsumption || '',
+        voltage: specs.voltage || '',
+        displaySize: specs.displaySize || '',
+        resolution: specs.resolution || '',
+        ram: specs.ram || '',
+        storage: specs.storage || '',
+        batteryCapacity: specs.batteryCapacity || '',
+        processor: specs.processor || '',
+        operatingSystem: specs.operatingSystem || '',
+        camera: specs.camera || '',
+        speaker: specs.speaker || '',
+        connectivity: Array.isArray(specs.connectivity)
+          ? specs.connectivity.join(', ')
+          : specs.connectivity || '',
+        features: Array.isArray(specs.features)
+          ? specs.features.join(', ')
+          : specs.features || '',
+      },
       purchasePrice: prod.purchasePrice || prev.purchasePrice || 0,
       quantity: 1,
       serialNumbers: prod.isSerialized ? [''] : [],
@@ -275,6 +358,17 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
       String(p.modelNumber || '').toLowerCase().includes(q)
     );
   }).slice(0, 6);
+
+  // Specifications field update handler
+  const handleSpecChange = (field, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      specifications: {
+        ...prev.specifications,
+        [field]: value,
+      },
+    }));
+  };
 
   // Serial number list handlers
   const handleAddSerial = () => {
@@ -320,7 +414,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     }
   };
 
-  // Submit Handler: Handles both Existing Product (Update Inventory) & New Product (Create + Intake)
+  // Submit Handler: Handles both Existing Product & New Product with Full Specs
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -334,7 +428,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
     const cleanBarcode = (formData.barcode || query || '').trim();
     if (!cleanBarcode) {
-      setError('Barcode is required');
+      setError('Barcode is required to register or intake stock');
       return;
     }
 
@@ -361,7 +455,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
       if (cleanSerials.length !== intakeQty) {
         setError(
-          `Quantity (${intakeQty}) does not match the number of serial numbers entered (${cleanSerials.length})`
+          `Quantity (${intakeQty}) does not match the count of serial numbers entered (${cleanSerials.length})`
         );
         return;
       }
@@ -375,7 +469,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
     setSubmitting(true);
     try {
-      // 1. If it's a NEW product, first create the global catalog product
+      // 1. If it's a NEW product, create the global catalog product with all technical details
       if (!isExistingProduct) {
         if (!formData.name.trim()) {
           setError('Product Name is required for new products');
@@ -383,6 +477,18 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
           return;
         }
 
+        const parseCommaList = (val) => {
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'string') {
+            return val
+              .split(',')
+              .map((s) => s.trim())
+              .filter(Boolean);
+          }
+          return [];
+        };
+
+        const specs = formData.specifications || {};
         const productPayload = {
           barcode: cleanBarcode,
           name: formData.name.trim(),
@@ -391,12 +497,31 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
           description: formData.description.trim(),
           category: formData.category || 'General',
           brand: formData.brand || '',
-          isSerialized: formData.isSerialized,
+          isSerialized: Boolean(formData.isSerialized),
           cgstRate: Number(formData.cgstRate || 9),
           sgstRate: Number(formData.sgstRate || 9),
           igstRate: Number(formData.igstRate || 0),
           minStockLevel: Number(formData.minStockLevel || 2),
-          specifications: formData.specifications,
+          specifications: {
+            color: specs.color?.trim() || '',
+            warranty: specs.warranty?.trim() || '',
+            tollFreeNumber: specs.tollFreeNumber?.trim() || '',
+            dimensions: specs.dimensions?.trim() || '',
+            weight: specs.weight?.trim() || '',
+            powerConsumption: specs.powerConsumption?.trim() || '',
+            voltage: specs.voltage?.trim() || '',
+            displaySize: specs.displaySize?.trim() || '',
+            resolution: specs.resolution?.trim() || '',
+            ram: specs.ram?.trim() || '',
+            storage: specs.storage?.trim() || '',
+            batteryCapacity: specs.batteryCapacity?.trim() || '',
+            processor: specs.processor?.trim() || '',
+            operatingSystem: specs.operatingSystem?.trim() || '',
+            camera: specs.camera?.trim() || '',
+            speaker: specs.speaker?.trim() || '',
+            connectivity: parseCommaList(specs.connectivity),
+            features: parseCommaList(specs.features),
+          },
         };
 
         const createProdRes = await productService.addProduct(productPayload);
@@ -405,7 +530,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         }
       }
 
-      // 2. Receive Stock Intake into Branch (No MRP, No discount!)
+      // 2. Receive Stock Intake into Branch (Matches purchasePrice batch)
       const inventoryPayload = {
         branchId: targetBranchId,
         barcode: cleanBarcode,
@@ -419,10 +544,10 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         setSuccessMsg(
           `Success! Added ${intakeQty} unit(s) of "${
             formData.name || selectedProduct?.name || cleanBarcode
-          }" to inventory.`
+          }" to branch inventory at ₹${Number(formData.purchasePrice || 0).toLocaleString('en-IN')}.`
         );
 
-        // Invalidate and refresh caches
+        // Invalidate and refresh product caches
         dispatch(invalidateProductCaches());
         dispatch(fetchCatalogProducts({ force: true }));
         if (targetBranchId) {
@@ -430,11 +555,11 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         }
         if (onRefresh) onRefresh();
 
-        // Reset search for rapid scanning
+        // Reset search for next scan
         setTimeout(() => {
           resetState();
           searchInputRef.current?.focus();
-        }, 1200);
+        }, 1500);
       } else {
         throw new Error(intakeRes.message || 'Failed to receive stock intake');
       }
@@ -448,24 +573,69 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-3xl max-h-[92vh] flex flex-col bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
-        {/* Header */}
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
-              <Boxes className="w-6 h-6" />
+  const currentBranchName =
+    branches?.find((b) => b._id === (formData.branchId || selectedBranchId))?.name ||
+    currentBranch?.name ||
+    'Selected Branch';
+
+  const totalIntakeValuation = Number(formData.quantity || 0) * Number(formData.purchasePrice || 0);
+
+  const modalContent = (
+    <div
+      style={{ top: 0, left: 0, right: 0, bottom: 0, margin: 0, padding: 0 }}
+      className="fixed inset-0 top-0 left-0 w-screen h-screen z-[99999] m-0 p-0 flex flex-col bg-slate-100 text-slate-800 overflow-hidden"
+    >
+      {/* Top Navigation Bar */}
+      <header className="h-16 px-6 bg-white border-b border-slate-200 flex items-center justify-between shadow-sm shrink-0">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={onClose}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-slate-100 text-slate-600 hover:text-slate-900 font-bold text-xs transition-colors"
+            title="Press Esc to exit"
+          >
+            <ArrowLeft className="w-4 h-4 text-slate-500" />
+            <span>Back to Products</span>
+            <kbd className="hidden sm:inline-block ml-1 px-1.5 py-0.5 text-[10px] font-mono bg-slate-100 border border-slate-300 rounded text-slate-500">
+              ESC
+            </kbd>
+          </button>
+
+          <div className="h-6 w-px bg-slate-200" />
+
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-indigo-700 text-white flex items-center justify-center shadow-sm shadow-indigo-500/30">
+              <Boxes className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="font-extrabold text-slate-900 text-lg leading-tight">
-                Global Product & Stock Intake
-              </h3>
-              <p className="text-xs text-slate-500 font-medium">
-                Scan barcode to receive branch inventory or create a new product on one unified page
+              <h2 className="font-extrabold text-slate-900 text-base leading-tight flex items-center gap-2">
+                Product & Stock Intake Workspace
+                <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  Full Page View
+                </span>
+              </h2>
+              <p className="text-[11px] text-slate-500 font-medium">
+                Create new global products with technical specs or intake inventory into branch
               </p>
             </div>
           </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Active Branch Badge */}
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700">
+            <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Branch:</span>
+            <span className="text-indigo-600 font-extrabold">{currentBranchName}</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={resetState}
+            className="px-3 py-1.5 text-xs font-bold rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+          >
+            Clear Form
+          </button>
+
           <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors"
@@ -473,159 +643,149 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
             <X className="w-5 h-5" />
           </button>
         </div>
+      </header>
 
-        {/* Scrollable Form Body */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-          {/* Notifications */}
-          {error && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {successMsg && (
-            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              <span>{successMsg}</span>
-            </div>
-          )}
-
-          {/* Barcode Search / Scanner Input */}
-          <div className="space-y-1.5 relative" ref={dropdownRef}>
-            <label className="text-xs font-extrabold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
-              <Barcode className="w-4 h-4 text-indigo-600" />
-              Scan Barcode / Search Product
-            </label>
-            <div className="relative">
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={query}
-                onChange={(e) => handleQueryChange(e.target.value)}
-                onKeyDown={handleBarcodeKeyDown}
-                placeholder="Scan barcode or type name / model + press Enter..."
-                className="input-tactile text-sm pl-10 pr-10 py-3 font-mono bg-slate-50 focus:bg-white border-indigo-200 focus:border-indigo-600"
-              />
-              <Search className="w-5 h-5 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />
-              {lookupLoading && (
-                <RefreshCw className="w-4 h-4 text-indigo-600 absolute right-3.5 top-4 animate-spin pointer-events-none" />
-              )}
-              {query && !lookupLoading && (
+      {/* Main Form Body */}
+      <form onSubmit={handleSubmit} className="flex-1 overflow-hidden flex flex-col">
+        {/* Alerts Container */}
+        {(error || successMsg) && (
+          <div className="px-6 pt-4 shrink-0">
+            {error && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold flex items-center gap-2 animate-in slide-in-from-top-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="flex-1">{error}</span>
                 <button
                   type="button"
-                  onClick={resetState}
-                  className="p-1 text-slate-400 hover:text-slate-600 absolute right-3 top-3.5 rounded"
-                  title="Clear search"
+                  onClick={() => setError('')}
+                  className="p-1 text-rose-500 hover:text-rose-700"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
-            {/* Autocomplete Dropdown */}
-            {isDropdownOpen && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 z-30 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden divide-y divide-slate-100 max-h-56 overflow-y-auto">
-                {searchResults.map((prod) => (
-                  <button
-                    key={prod._id}
-                    type="button"
-                    onClick={() => applyExistingProduct(prod)}
-                    className="w-full text-left px-4 py-2.5 hover:bg-indigo-50/70 flex items-center justify-between text-xs transition-colors"
-                  >
-                    <div>
-                      <p className="font-bold text-slate-900">{prod.name}</p>
-                      <p className="font-mono text-[11px] text-slate-400">
-                        Barcode: {prod.barcode} {prod.modelNumber ? `| Model: ${prod.modelNumber}` : ''}
-                      </p>
-                    </div>
-                    <span className="badge badge-indigo text-[10px] uppercase font-bold">
-                      {prod.category || 'General'}
-                    </span>
-                  </button>
-                ))}
+            {successMsg && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2 animate-in slide-in-from-top-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="flex-1">{successMsg}</span>
+                <button
+                  type="button"
+                  onClick={() => setSuccessMsg('')}
+                  className="p-1 text-emerald-500 hover:text-emerald-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
             )}
           </div>
+        )}
 
-          {/* STATE 1: Existing Product Detected */}
-          {isExistingProduct && selectedProduct && (
-            <div className="p-4 rounded-2xl bg-emerald-50/80 border border-emerald-200 space-y-3">
+        {/* 2-Column Responsive Workspace */}
+        <div className="flex-1 p-6 grid grid-cols-1 xl:grid-cols-12 gap-6 overflow-hidden">
+          {/* LEFT COLUMN: Product Definition & Full Technical Details */}
+          <div className="xl:col-span-7 2xl:col-span-8 overflow-y-auto pr-2 space-y-6">
+            {/* Card 1: Barcode & Product Identification */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
               <div className="flex items-center justify-between">
-                <span className="badge badge-emerald text-[11px] font-extrabold flex items-center gap-1.5 py-1 px-3">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> Product Found in Catalog
-                </span>
-                <span className="text-[11px] font-bold text-slate-500 font-mono">
-                  ID: {selectedProduct._id?.slice(-6)}
-                </span>
+                <div className="flex items-center gap-2">
+                  <Barcode className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-slate-900 text-sm">
+                    1. Barcode & Product Identification
+                  </h3>
+                </div>
+
+                {isExistingProduct ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-emerald-100 text-emerald-800 border border-emerald-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Existing Global Product Found
+                  </span>
+                ) : query.trim() ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-300">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    New Global Product to Register
+                  </span>
+                ) : null}
               </div>
 
-              <div>
-                <h4 className="text-base font-extrabold text-slate-900 leading-tight">
-                  {selectedProduct.name}
-                </h4>
-                <div className="flex flex-wrap items-center gap-2 pt-2 text-xs">
-                  <span className="px-2.5 py-0.5 rounded-lg bg-white border border-emerald-200 font-mono font-bold text-slate-700">
-                    Barcode: {selectedProduct.barcode}
-                  </span>
-                  {selectedProduct.category && (
-                    <span className="px-2.5 py-0.5 rounded-lg bg-white border border-emerald-200 font-bold text-slate-700">
-                      Category: {selectedProduct.category}
-                    </span>
+              {/* Barcode Search / Scan Input */}
+              <div className="relative" ref={dropdownRef}>
+                <div className="relative">
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={query}
+                    onChange={(e) => handleQueryChange(e.target.value)}
+                    onKeyDown={handleBarcodeKeyDown}
+                    placeholder="Scan barcode with scanner or search product name / model number..."
+                    className="w-full pl-11 pr-24 py-3 bg-slate-50 border-2 border-slate-200 focus:border-indigo-600 focus:bg-white rounded-2xl text-sm font-semibold text-slate-900 transition-all outline-none font-mono"
+                  />
+                  <Search className="w-5 h-5 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+
+                  {lookupLoading && (
+                    <RefreshCw className="w-4 h-4 text-indigo-600 animate-spin absolute right-4 top-1/2 -translate-y-1/2" />
                   )}
-                  {selectedProduct.brand && (
-                    <span className="px-2.5 py-0.5 rounded-lg bg-white border border-emerald-200 font-bold text-slate-700">
-                      Brand: {selectedProduct.brand}
-                    </span>
-                  )}
-                  {selectedProduct.modelNumber && (
-                    <span className="px-2.5 py-0.5 rounded-lg bg-white border border-emerald-200 font-mono text-slate-700">
-                      Model: {selectedProduct.modelNumber}
-                    </span>
-                  )}
-                  <span className="px-2.5 py-0.5 rounded-lg bg-white border border-emerald-200 font-semibold text-slate-700">
-                    GST: {selectedProduct.cgstRate + selectedProduct.sgstRate}% (CGST {selectedProduct.cgstRate}%, SGST {selectedProduct.sgstRate}%)
-                  </span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded-lg border font-bold text-[11px] ${
-                      selectedProduct.isSerialized
-                        ? 'bg-purple-50 text-purple-700 border-purple-200'
-                        : 'bg-blue-50 text-blue-700 border-blue-200'
-                    }`}
-                  >
-                    {selectedProduct.isSerialized ? 'Serialized Tracking' : 'Standard Quantity'}
-                  </span>
                 </div>
+
+                {/* Autocomplete Dropdown */}
+                {isDropdownOpen && searchResults.length > 0 && (
+                  <div className="absolute left-0 right-0 top-full mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden z-20">
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Matching Global Products ({searchResults.length})
+                    </div>
+                    {searchResults.map((item) => (
+                      <button
+                        key={item._id}
+                        type="button"
+                        onClick={() => applyExistingProduct(item)}
+                        className="w-full p-3 text-left hover:bg-indigo-50/70 border-b border-slate-100 last:border-0 flex items-center justify-between transition-colors"
+                      >
+                        <div>
+                          <span className="font-extrabold text-xs text-slate-900 block">
+                            {item.name}
+                          </span>
+                          <span className="text-[11px] font-mono text-slate-500">
+                            Barcode: {item.barcode} | Model: {item.modelNumber || 'N/A'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700">
+                          {item.category || 'General'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-          )}
 
-          {/* STATE 2: New Global Product Details Required */}
-          {!isExistingProduct && query.trim() && (
-            <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-4">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-amber-600" />
-                <span className="font-extrabold text-xs text-amber-900 uppercase tracking-wide">
-                  New Product Definition
-                </span>
-                <span className="text-[10px] text-amber-700 font-medium">
-                  (Will be created globally in catalog)
-                </span>
+            {/* Card 2: Core Product Information */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Tag className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-slate-900 text-sm">
+                    2. Core Product Information
+                  </h3>
+                </div>
+                {isExistingProduct && (
+                  <span className="text-xs font-semibold text-slate-500">
+                    Loaded from catalog
+                  </span>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                 {/* Product Name */}
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-slate-700">
+                <div className="md:col-span-2 space-y-1">
+                  <label className="font-bold text-slate-700 flex items-center gap-1">
                     Product Name <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
-                    required
                     value={formData.name}
                     onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
-                    placeholder="e.g. Sony Bravia 55 Inch 4K Smart TV"
-                    className="input-tactile text-xs py-2 bg-white"
+                    disabled={isExistingProduct}
+                    placeholder="e.g. Samsung 55 Inch 4K Crystal UHD TV"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-bold text-slate-900 disabled:bg-slate-100 disabled:text-slate-600"
                   />
                 </div>
 
@@ -636,9 +796,12 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     type="text"
                     list="categories-list"
                     value={formData.category}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, category: e.target.value }))}
-                    placeholder="e.g. Televisions / Electronics"
-                    className="input-tactile text-xs py-2 bg-white"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, category: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    placeholder="e.g. Television / Mobile"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                   <datalist id="categories-list">
                     {(reduxCategories || []).map((c) => (
@@ -655,8 +818,9 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     list="brands-list"
                     value={formData.brand}
                     onChange={(e) => setFormData((prev) => ({ ...prev, brand: e.target.value }))}
-                    placeholder="e.g. Sony / Samsung"
-                    className="input-tactile text-xs py-2 bg-white"
+                    disabled={isExistingProduct}
+                    placeholder="e.g. Samsung / Sony / Apple"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                   <datalist id="brands-list">
                     {(reduxBrands || []).map((b) => (
@@ -667,29 +831,35 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
 
                 {/* Model Number */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Model Number (Optional)</label>
+                  <label className="font-bold text-slate-700">Model Number</label>
                   <input
                     type="text"
                     value={formData.modelNumber}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, modelNumber: e.target.value }))}
-                    placeholder="e.g. KD-55X74K"
-                    className="input-tactile text-xs py-2 bg-white font-mono"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, modelNumber: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    placeholder="e.g. UA55AUE60AKLXL"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                 </div>
 
                 {/* HSN Code */}
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-700">HSN Code (Optional)</label>
+                  <label className="font-bold text-slate-700">HSN Code</label>
                   <input
                     type="text"
                     value={formData.hsnCode}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, hsnCode: e.target.value }))}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, hsnCode: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
                     placeholder="e.g. 8528"
-                    className="input-tactile text-xs py-2 bg-white font-mono"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                 </div>
 
-                {/* Tax Rates (Defaults to 9% + 9% = 18%) */}
+                {/* CGST Rate */}
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700">CGST Rate (%)</label>
                   <input
@@ -698,11 +868,15 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     max="50"
                     step="any"
                     value={formData.cgstRate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, cgstRate: e.target.value }))}
-                    className="input-tactile text-xs py-2 bg-white font-mono"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, cgstRate: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                 </div>
 
+                {/* SGST Rate */}
                 <div className="space-y-1">
                   <label className="font-bold text-slate-700">SGST Rate (%)</label>
                   <input
@@ -711,205 +885,597 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     max="50"
                     step="any"
                     value={formData.sgstRate}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, sgstRate: e.target.value }))}
-                    className="input-tactile text-xs py-2 bg-white font-mono"
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, sgstRate: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
+                  />
+                </div>
+
+                {/* IGST Rate */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">IGST Rate (%)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="50"
+                    step="any"
+                    value={formData.igstRate}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, igstRate: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
+                  />
+                </div>
+
+                {/* Min Stock Level */}
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Min Stock Alert Level</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={formData.minStockLevel}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, minStockLevel: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                 </div>
 
                 {/* Serialized Tracking Toggle */}
-                <div className="sm:col-span-2 flex items-center justify-between p-3 rounded-xl bg-white border border-slate-200">
-                  <div>
-                    <span className="font-bold text-slate-900 block text-xs">
-                      Serialized Product Tracking
-                    </span>
-                    <span className="text-[11px] text-slate-500">
-                      Enable if each item has a unique serial number (e.g. Mobile, TV, Laptop)
-                    </span>
+                <div className="md:col-span-2 lg:col-span-3 flex items-center justify-between p-3.5 rounded-2xl bg-indigo-50/40 border border-indigo-100">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center">
+                      <Hash className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-slate-900 block text-xs">
+                        Serialized Product Tracking (Unique Serial / IMEI per unit)
+                      </span>
+                      <span className="text-[11px] text-slate-500">
+                        Enable for high-value items (Laptops, TVs, Phones) where each physical unit has a distinct serial number
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
+                    disabled={isExistingProduct}
                     onClick={() =>
                       setFormData((prev) => ({ ...prev, isSerialized: !prev.isSerialized }))
                     }
                     className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
-                      formData.isSerialized ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'
-                    }`}
+                      formData.isSerialized
+                        ? 'bg-indigo-600 justify-end'
+                        : 'bg-slate-300 justify-start'
+                    } disabled:opacity-60`}
                   >
                     <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
                   </button>
                 </div>
               </div>
             </div>
-          )}
 
-          {/* STOCK INTAKE SECTION (Shown whenever barcode/product is present) */}
-          {(isExistingProduct || query.trim()) && (
-            <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100 space-y-4">
-              <div className="flex items-center gap-2">
-                <Boxes className="w-4 h-4 text-indigo-600" />
-                <span className="font-extrabold text-xs text-indigo-950 uppercase tracking-wide">
-                  Stock Intake Details
-                </span>
-                <span className="text-[11px] text-indigo-600 font-medium">
-                  (No MRP or discount required)
-                </span>
+            {/* Card 3: Technical Details & Specifications */}
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Cpu className="w-5 h-5 text-indigo-600" />
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-sm">
+                      3. Product Technical Details & Specifications
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Configure comprehensive physical, electrical, and hardware specifications
+                    </p>
+                  </div>
+                </div>
+
+                {/* Spec Category Selector Tabs */}
+                <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
+                  <button
+                    type="button"
+                    onClick={() => setSpecsActiveTab('general')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      specsActiveTab === 'general'
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    General
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpecsActiveTab('display')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      specsActiveTab === 'display'
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Display & Power
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpecsActiveTab('performance')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      specsActiveTab === 'performance'
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Performance & Memory
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSpecsActiveTab('multimedia')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                      specsActiveTab === 'multimedia'
+                        ? 'bg-white text-indigo-700 shadow-sm'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    Audio & Features
+                  </button>
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                {/* Target Branch */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Target Branch</label>
-                  <select
-                    value={formData.branchId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value }))}
-                    className="input-tactile text-xs py-2 bg-white font-bold text-slate-800"
-                  >
-                    {branches && branches.length > 0 ? (
-                      branches.map((b) => (
-                        <option key={b._id} value={b._id}>
-                          {b.name} ({b.code})
-                        </option>
-                      ))
-                    ) : (
-                      <option value="">Main Branch</option>
-                    )}
-                  </select>
+              {/* SPEC TAB 1: General & Dimensions */}
+              {specsActiveTab === 'general' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs animate-in fade-in duration-150">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Palette className="w-3.5 h-3.5 text-slate-400" /> Color
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.color}
+                      onChange={(e) => handleSpecChange('color', e.target.value)}
+                      placeholder="e.g. Phantom Black / Silver"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <ShieldCheck className="w-3.5 h-3.5 text-slate-400" /> Warranty Details
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.warranty}
+                      onChange={(e) => handleSpecChange('warranty', e.target.value)}
+                      placeholder="e.g. 1 Year Comprehensive Brand Warranty"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <PhoneCall className="w-3.5 h-3.5 text-slate-400" /> Customer Support / Toll Free
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.tollFreeNumber}
+                      onChange={(e) => handleSpecChange('tollFreeNumber', e.target.value)}
+                      placeholder="e.g. 1800-40-7267864"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Ruler className="w-3.5 h-3.5 text-slate-400" /> Dimensions
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.dimensions}
+                      onChange={(e) => handleSpecChange('dimensions', e.target.value)}
+                      placeholder="e.g. 146.7 x 71.5 x 7.6 mm"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      Weight
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.weight}
+                      onChange={(e) => handleSpecChange('weight', e.target.value)}
+                      placeholder="e.g. 185 grams / 12.5 kg"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* SPEC TAB 2: Display & Power */}
+              {specsActiveTab === 'display' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs animate-in fade-in duration-150">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Monitor className="w-3.5 h-3.5 text-slate-400" /> Display Size
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.displaySize}
+                      onChange={(e) => handleSpecChange('displaySize', e.target.value)}
+                      placeholder="e.g. 55 inch OLED / 6.7 inch AMOLED"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Resolution</label>
+                    <input
+                      type="text"
+                      value={formData.specifications.resolution}
+                      onChange={(e) => handleSpecChange('resolution', e.target.value)}
+                      placeholder="e.g. 3840 x 2160 (4K UHD) / 1080p"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-slate-400" /> Power Consumption
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.powerConsumption}
+                      onChange={(e) => handleSpecChange('powerConsumption', e.target.value)}
+                      placeholder="e.g. 145W / 65W Max"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Operating Voltage</label>
+                    <input
+                      type="text"
+                      value={formData.specifications.voltage}
+                      onChange={(e) => handleSpecChange('voltage', e.target.value)}
+                      placeholder="e.g. 220-240V AC, 50/60 Hz"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* SPEC TAB 3: Performance & Memory */}
+              {specsActiveTab === 'performance' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs animate-in fade-in duration-150">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-slate-400" /> Processor / Chipset
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.processor}
+                      onChange={(e) => handleSpecChange('processor', e.target.value)}
+                      placeholder="e.g. Snapdragon 8 Gen 3 / Apple M3"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      RAM (Memory)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.ram}
+                      onChange={(e) => handleSpecChange('ram', e.target.value)}
+                      placeholder="e.g. 8GB LPDDR5X / 16GB Unified"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <HardDrive className="w-3.5 h-3.5 text-slate-400" /> Internal Storage (ROM)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.storage}
+                      onChange={(e) => handleSpecChange('storage', e.target.value)}
+                      placeholder="e.g. 256GB UFS 4.0 / 1TB SSD"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700">Operating System (OS)</label>
+                    <input
+                      type="text"
+                      value={formData.specifications.operatingSystem}
+                      onChange={(e) => handleSpecChange('operatingSystem', e.target.value)}
+                      placeholder="e.g. Android 14 / Tizen / Windows 11"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Battery className="w-3.5 h-3.5 text-slate-400" /> Battery Capacity
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.batteryCapacity}
+                      onChange={(e) => handleSpecChange('batteryCapacity', e.target.value)}
+                      placeholder="e.g. 5000 mAh / 70Wh"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* SPEC TAB 4: Audio, Camera & Features */}
+              {specsActiveTab === 'multimedia' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs animate-in fade-in duration-150">
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-slate-400" /> Camera Setup
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.camera}
+                      onChange={(e) => handleSpecChange('camera', e.target.value)}
+                      placeholder="e.g. 50MP Main OIS + 12MP Ultra-Wide + 10MP Telephoto"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Volume2 className="w-3.5 h-3.5 text-slate-400" /> Speakers / Audio
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.speaker}
+                      onChange={(e) => handleSpecChange('speaker', e.target.value)}
+                      placeholder="e.g. Stereo Speakers, Dolby Atmos, 20W Output"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Wifi className="w-3.5 h-3.5 text-slate-400" /> Connectivity (comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.connectivity}
+                      onChange={(e) => handleSpecChange('connectivity', e.target.value)}
+                      placeholder="e.g. 5G, Wi-Fi 6E, Bluetooth 5.3, NFC, HDMI 2.1, USB-C"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="font-bold text-slate-700 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-slate-400" /> Key Features (comma-separated)
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.specifications.features}
+                      onChange={(e) => handleSpecChange('features', e.target.value)}
+                      placeholder="e.g. IP68 Water Resistance, 45W Fast Charging, Wireless DeX"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: Branch Stock Intake Execution */}
+          <div className="xl:col-span-5 2xl:col-span-4 flex flex-col bg-white rounded-3xl p-6 shadow-sm border border-slate-200 overflow-y-auto space-y-6">
+            <div className="border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Boxes className="w-5 h-5 text-indigo-600" />
+                <h3 className="font-extrabold text-slate-900 text-sm">
+                  Stock Intake Execution
+                </h3>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-0.5">
+                Assign stock quantities, purchase cost, and serial units to branch
+              </p>
+            </div>
+
+            {/* Target Branch Selector */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                Target Branch for Intake <span className="text-rose-500">*</span>
+              </label>
+              <select
+                value={formData.branchId}
+                onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value }))}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-bold text-slate-900"
+              >
+                {(branches || []).map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.name} ({b.code || 'Main'})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Purchase Price Input */}
+            <div className="space-y-1.5">
+              <label className="font-bold text-slate-700 text-xs flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-indigo-600" />
+                  Purchase Cost / Unit Price (₹) <span className="text-rose-500">*</span>
+                </span>
+                <span className="text-[10px] text-indigo-600 font-semibold">
+                  Batches grouped by Cost
+                </span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400 font-mono text-xs">
+                  ₹
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={formData.purchasePrice}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, purchasePrice: e.target.value }))
+                  }
+                  placeholder="0.00"
+                  className="w-full pl-8 pr-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-600 bg-slate-50/50 focus:bg-white outline-none text-sm font-mono font-bold text-slate-900"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Note: MRP and discounts are omitted. Selling price is decided dynamically at sale time.
+              </p>
+            </div>
+
+            {/* Serial Numbers OR Quantity */}
+            {formData.isSerialized ? (
+              <div className="space-y-3 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                    <Hash className="w-3.5 h-3.5 text-indigo-600" />
+                    Serial Numbers / IMEIs
+                  </span>
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setSerialInputMode('bulk')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        serialInputMode === 'bulk'
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Bulk Paste
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSerialInputMode('individual')}
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        serialInputMode === 'individual'
+                          ? 'bg-indigo-600 text-white'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      Individual
+                    </button>
+                  </div>
                 </div>
 
-                {/* Purchase Cost (Optional) */}
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-700">Unit Purchase Cost (₹ Optional)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    step="any"
-                    value={formData.purchasePrice}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, purchasePrice: e.target.value }))
-                    }
-                    placeholder="0.00"
-                    className="input-tactile text-xs py-2 bg-white font-mono"
-                  />
-                </div>
-
-                {/* Intake Quantity */}
-                <div className="sm:col-span-2 space-y-1">
-                  <label className="font-bold text-slate-700">
-                    Quantity to Add <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={formData.quantity}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))
-                    }
-                    className="input-tactile text-sm py-2.5 font-bold font-mono bg-white"
-                  />
-                </div>
-
-                {/* Serial Numbers (Only if Serialized Product) */}
-                {(isExistingProduct ? selectedProduct?.isSerialized : formData.isSerialized) && (
-                  <div className="sm:col-span-2 space-y-3 pt-1">
-                    <div className="flex items-center justify-between">
-                      <label className="font-bold text-slate-800 flex items-center gap-1.5">
-                        <Hash className="w-3.5 h-3.5 text-indigo-600" />
-                        Serial Numbers ({formData.quantity} required)
-                      </label>
-                      <div className="flex items-center gap-1 bg-slate-200/80 p-0.5 rounded-lg text-[10px]">
-                        <button
-                          type="button"
-                          onClick={() => setSerialInputMode('bulk')}
-                          className={`px-2 py-0.5 rounded font-bold transition-all ${
-                            serialInputMode === 'bulk'
-                              ? 'bg-white text-indigo-700 shadow-xs'
-                              : 'text-slate-600'
-                          }`}
-                        >
-                          Bulk Paste
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSerialInputMode('individual')}
-                          className={`px-2 py-0.5 rounded font-bold transition-all ${
-                            serialInputMode === 'individual'
-                              ? 'bg-white text-indigo-700 shadow-xs'
-                              : 'text-slate-600'
-                          }`}
-                        >
-                          One-by-One
-                        </button>
-                      </div>
-                    </div>
-
-                    {serialInputMode === 'bulk' ? (
-                      <div className="space-y-1">
-                        <textarea
-                          rows={3}
-                          value={bulkSerialText}
-                          onChange={(e) => setBulkSerialText(e.target.value)}
-                          onBlur={handleBulkSerialBlur}
-                          placeholder="Paste serial numbers separated by lines, commas, or tabs..."
-                          className="input-tactile font-mono text-xs p-2.5 bg-white w-full"
-                        />
-                        <p className="text-[10px] text-slate-500 font-mono">
-                          Parsed:{' '}
+                {serialInputMode === 'bulk' ? (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={5}
+                      value={bulkSerialText}
+                      onChange={(e) => setBulkSerialText(e.target.value)}
+                      onBlur={handleBulkSerialBlur}
+                      placeholder="Paste list of serial numbers separated by lines, commas, or tabs..."
+                      className="w-full p-3 font-mono text-xs rounded-xl border border-slate-200 bg-white focus:border-indigo-600 outline-none"
+                    />
+                    <div className="flex items-center justify-between text-[11px] font-mono text-slate-600">
+                      <span>
+                        Parsed Units:{' '}
+                        <strong>
                           {
                             bulkSerialText
                               .split(/[\n,;\t]+/)
                               .map((s) => s.trim())
                               .filter(Boolean).length
-                          }{' '}
-                          serial number(s)
-                        </p>
+                          }
+                        </strong>
+                      </span>
+                      <span className="text-[10px] text-indigo-600">
+                        Auto-synchronizes intake quantity
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {formData.serialNumbers.map((sn, idx) => (
+                      <div key={idx} className="flex items-center gap-2">
+                        <span className="text-[10px] font-mono text-slate-400 w-6">
+                          #{idx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={sn}
+                          onChange={(e) => handleSerialChange(idx, e.target.value)}
+                          placeholder={`Serial / IMEI #${idx + 1}`}
+                          className="flex-1 px-3 py-1.5 rounded-lg border border-slate-200 bg-white font-mono text-xs outline-none focus:border-indigo-600"
+                        />
+                        {formData.serialNumbers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveSerial(idx)}
+                            className="p-1 text-slate-400 hover:text-rose-600"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
-                    ) : (
-                      <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                        {formData.serialNumbers.map((sn, idx) => (
-                          <div key={idx} className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono text-slate-400 w-5">
-                              #{idx + 1}
-                            </span>
-                            <input
-                              type="text"
-                              value={sn}
-                              onChange={(e) => handleSerialChange(idx, e.target.value)}
-                              placeholder={`Serial Number #${idx + 1}`}
-                              className="input-tactile text-xs py-1.5 font-mono bg-white flex-1"
-                            />
-                            {formData.serialNumbers.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveSerial(idx)}
-                                className="p-1 text-slate-400 hover:text-rose-600"
-                              >
-                                <X className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                        <button
-                          type="button"
-                          onClick={handleAddSerial}
-                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-1"
-                        >
-                          <Plus className="w-3.5 h-3.5" /> Add Another Serial
-                        </button>
-                      </div>
-                    )}
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleAddSerial}
+                      className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 pt-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Add Another Serial
+                    </button>
                   </div>
                 )}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="space-y-1.5">
+                <label className="font-bold text-slate-700 text-xs">
+                  Intake Stock Quantity <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={formData.quantity}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-600 bg-slate-50/50 focus:bg-white outline-none text-sm font-mono font-bold text-slate-900"
+                />
+              </div>
+            )}
 
-          {/* Submit Action Button */}
-          <div className="pt-2">
+            {/* Total Valuation Preview Widget */}
+            <div className="p-4 rounded-2xl bg-gradient-to-br from-slate-900 to-indigo-950 text-white space-y-2 mt-auto">
+              <span className="text-[10px] font-bold text-indigo-300 uppercase tracking-widest block">
+                Intake Valuation Preview
+              </span>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-extrabold font-mono text-white">
+                    ₹{totalIntakeValuation.toLocaleString('en-IN')}
+                  </div>
+                  <span className="text-[11px] text-indigo-200">
+                    {formData.quantity} unit(s) @ ₹{Number(formData.purchasePrice || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center border border-indigo-500/30">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Action Button */}
             <button
               type="submit"
               disabled={submitting || (!isExistingProduct && !query.trim())}
-              className={`w-full py-3.5 px-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
+              className={`w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
                 isExistingProduct
                   ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
                   : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-500/25'
@@ -917,11 +1483,11 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
             >
               {submitting ? (
                 <>
-                  <RefreshCw className="w-4 h-4 animate-spin" /> Processing...
+                  <RefreshCw className="w-4 h-4 animate-spin" /> Processing Intake...
                 </>
               ) : isExistingProduct ? (
                 <>
-                  <Boxes className="w-4 h-4" /> Update Branch Inventory (+{formData.quantity} Units)
+                  <Boxes className="w-4 h-4" /> Receive Branch Inventory (+{formData.quantity} Units)
                 </>
               ) : (
                 <>
@@ -930,10 +1496,12 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
               )}
             </button>
           </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 };
 
 export default UnifiedStockIntakeModal;

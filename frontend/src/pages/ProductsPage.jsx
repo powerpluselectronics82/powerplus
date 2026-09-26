@@ -439,14 +439,14 @@ export const ProductsPage = () => {
               <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest block">
                 Total Stock Valuation
               </span>
-              <div className="text-2xl font-extrabold font-mono mt-0.5 text-black">
+              <div className="text-2xl font-extrabold font-mono mt-0.5 text-white">
                 ₹{Number(valuation.totalValue || 0).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
 
           <div className="text-right text-xs text-indigo-200">
-            <span className="font-bold block text-black">
+            <span className="font-bold block text-white">
               {products.length} Products Tracked
             </span>
             <span>Evaluated at purchase cost</span>
