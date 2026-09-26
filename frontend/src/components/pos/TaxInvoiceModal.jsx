@@ -204,21 +204,21 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
     ? new Date(activeSale.createdAt || sale.createdAt).toLocaleDateString('en-IN')
     : new Date().toLocaleDateString('en-IN');
 
-  const customerName = activeSale.customerName || sale.customerName || sale.buyerName || sale.customer?.name || 'Walk-in Customer';
-  const customerPhone = activeSale.customerPhone || sale.customerPhone || sale.buyerPhone || sale.customer?.phone || '';
+  const customerName = activeSale?.customerName ?? sale?.customerName ?? sale?.buyerName ?? sale?.customer?.name ?? 'Walk-in Customer';
+  const customerPhone = activeSale?.customerPhone ?? sale?.customerPhone ?? sale?.buyerPhone ?? sale?.customer?.phone ?? '';
   const customerAddress =
-    activeSale.customerAddress ||
-    sale.customerAddress ||
-    sale.buyerAddress ||
-    sale.customer?.address ||
-    sale.address ||
+    activeSale?.customerAddress ??
+    sale?.customerAddress ??
+    sale?.buyerAddress ??
+    sale?.customer?.address ??
+    sale?.address ??
     '';
   const customerGstin =
-    activeSale.customerGstin ||
-    sale.customerGstin ||
-    activeSale.buyerGstin ||
-    sale.buyerGstin ||
-    sale.customer?.gstin ||
+    activeSale?.customerGstin ??
+    sale?.customerGstin ??
+    activeSale?.buyerGstin ??
+    sale?.buyerGstin ??
+    sale?.customer?.gstin ??
     '';
   const cashierName = activeSale.cashierName || sale.cashierName || 'Cashier';
   const branchName = activeSale.branchName || sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
@@ -268,7 +268,11 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
 
   const handleSaveCustomer = async (e) => {
     if (e) e.preventDefault();
-    if (!activeSale?._id) return;
+    const resolvedSaleId = activeSale?._id || activeSale?.id || sale?._id || sale?.id;
+    if (!resolvedSaleId) {
+      setCustomerEditError('Sale ID is missing');
+      return;
+    }
 
     setIsSavingCustomer(true);
     setCustomerEditError('');
@@ -281,23 +285,27 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
         customerGstin: customerFormData.customerGstin.trim().toUpperCase(),
       };
 
-      const res = await saleService.updateSaleCustomer(activeSale._id, payload);
+      const res = await saleService.updateSaleCustomer(resolvedSaleId, payload);
 
-      if (res?.data?.success && res?.data?.data) {
+      // Note: api.js response interceptor unwraps response.data directly
+      const isSuccess = Boolean(res?.success || res?.data);
+      const updatedData = res?.data || res;
+
+      if (isSuccess) {
         setActiveSale((prev) => ({
           ...prev,
-          ...res.data.data,
-          customerName: payload.customerName || prev.customerName,
-          customerPhone: payload.customerPhone,
-          customerAddress: payload.customerAddress,
-          customerGstin: payload.customerGstin,
+          ...(typeof updatedData === 'object' ? updatedData : {}),
+          customerName: payload.customerName || prev?.customerName || 'Walk-in Customer',
+          customerPhone: payload.customerPhone !== undefined ? payload.customerPhone : prev?.customerPhone,
+          customerAddress: payload.customerAddress !== undefined ? payload.customerAddress : prev?.customerAddress,
+          customerGstin: payload.customerGstin !== undefined ? payload.customerGstin : prev?.customerGstin,
         }));
         setIsEditingCustomer(false);
         if (typeof onPaymentUpdated === 'function') {
           onPaymentUpdated();
         }
       } else {
-        setCustomerEditError(res?.data?.message || 'Failed to update customer details');
+        setCustomerEditError(res?.message || 'Failed to update customer details');
       }
     } catch (err) {
       console.error('Error updating customer details:', err);

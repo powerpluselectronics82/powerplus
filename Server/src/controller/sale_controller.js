@@ -1287,7 +1287,10 @@ const updateSaleCustomerDetails = async (req, res) => {
       return res.status(400).json({ success: false, message: "saleId is required" });
     }
 
-    const sale = await Sale.findOne({ _id: saleId, companyId });
+    const targetSaleId = toObjectId(saleId);
+    const targetCompanyId = toObjectId(companyId);
+
+    const sale = await Sale.findOne({ _id: targetSaleId, companyId: targetCompanyId });
     if (!sale) {
       return res.status(404).json({ success: false, message: "Sale not found" });
     }
@@ -1299,49 +1302,54 @@ const updateSaleCustomerDetails = async (req, res) => {
       }
     }
 
+    const updateFields = {};
     if (customerName !== undefined) {
-      sale.customerName = customerName.trim() || "Walk-in Customer";
+      updateFields.customerName = customerName.trim() || "Walk-in Customer";
     }
     if (customerPhone !== undefined) {
-      sale.customerPhone = customerPhone.trim();
+      updateFields.customerPhone = customerPhone.trim();
     }
     if (customerAddress !== undefined) {
-      sale.customerAddress = customerAddress.trim();
+      updateFields.customerAddress = customerAddress.trim();
     }
     if (customerGstin !== undefined) {
-      sale.customerGstin = customerGstin.trim().toUpperCase();
+      updateFields.customerGstin = customerGstin.trim().toUpperCase();
     }
 
-    await sale.save();
+    const updatedSale = await Sale.findOneAndUpdate(
+      { _id: targetSaleId, companyId: targetCompanyId },
+      { $set: updateFields },
+      { new: true }
+    );
 
     // Keep payment records in sync with updated customer details
     await Payment.updateMany(
-      { saleId: sale._id },
+      { saleId: updatedSale._id },
       {
         $set: {
-          customerName: sale.customerName,
-          customerPhone: sale.customerPhone,
+          customerName: updatedSale.customerName,
+          customerPhone: updatedSale.customerPhone,
         },
       }
     );
 
     // Invalidate Redis sales caches
-    await invalidateSaleCaches(companyId, sale.branchId, sale.cashierId);
+    await invalidateSaleCaches(companyId, updatedSale.branchId, updatedSale.cashierId);
 
     // Audit log if logger is available
     try {
       if (typeof createAuditLog === "function") {
         await createAuditLog({
           companyId,
-          branchId: sale.branchId,
+          branchId: updatedSale.branchId,
           userId: req.user._id,
           action: "UPDATE_SALE_CUSTOMER",
           details: {
-            saleId: sale._id,
-            invoiceNumber: sale.invoiceNumber,
-            customerName: sale.customerName,
-            customerPhone: sale.customerPhone,
-            customerGstin: sale.customerGstin,
+            saleId: updatedSale._id,
+            invoiceNumber: updatedSale.invoiceNumber,
+            customerName: updatedSale.customerName,
+            customerPhone: updatedSale.customerPhone,
+            customerGstin: updatedSale.customerGstin,
           },
         });
       }
@@ -1352,7 +1360,7 @@ const updateSaleCustomerDetails = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Customer details updated successfully",
-      data: sale,
+      data: updatedSale,
     });
   } catch (err) {
     console.error("Update sale customer error:", err);
