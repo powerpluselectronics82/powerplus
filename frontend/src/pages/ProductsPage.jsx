@@ -324,15 +324,15 @@ export const ProductsPage = () => {
                         <div class="serials-title">Added Serial Numbers (${item.serialNumbers.length}):</div>
                         <div>
                           ${item.serialNumbers.map(s => {
-                            const sn = typeof s === 'object' ? s.serialNumber : s;
-                            const dt = s?.addedAt ? new Date(s.addedAt).toLocaleDateString('en-IN') : '';
-                            return `
+      const sn = typeof s === 'object' ? s.serialNumber : s;
+      const dt = s?.addedAt ? new Date(s.addedAt).toLocaleDateString('en-IN') : '';
+      return `
                               <span class="serial-tag">
                                 ${sn}
                                 ${dt ? `<span class="serial-date">(${dt})</span>` : ''}
                               </span>
                             `;
-                          }).join('')}
+    }).join('')}
                         </div>
                       </div>
                     ` : ''}
@@ -445,23 +445,23 @@ export const ProductsPage = () => {
 
       {/* Stock Valuation Summary Widget */}
       {valuation && (
-        <div className="tactile-card p-5 bg-gradient-to-r from-slate-900 to-indigo-950 text-white flex items-center justify-between">
+        <div className="tactile-card p-5 bg-black text-white border border-neutral-800 shadow-xl flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-neutral-900 text-white border border-neutral-700/80 flex items-center justify-center">
               <DollarSign className="w-6 h-6" />
             </div>
             <div>
-              <span className="text-xs font-bold text-indigo-300 uppercase tracking-widest block">
+              <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest block">
                 Total Stock Valuation
               </span>
-              <div className="text-2xl font-extrabold font-mono mt-0.5 text-white">
+              <div className="text-2xl font-extrabold font-mono mt-0.5 text-black">
                 ₹{Number(valuation.totalValue || 0).toLocaleString('en-IN')}
               </div>
             </div>
           </div>
 
-          <div className="text-right text-xs text-indigo-200">
-            <span className="font-bold block text-white">
+          <div className="text-right text-xs text-neutral-400">
+            <span className="font-bold block text-black">
               {products.length} Products Tracked
             </span>
             <span>Evaluated at purchase cost</span>
@@ -483,20 +483,18 @@ export const ProductsPage = () => {
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
-                  tab === t.id
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${tab === t.id
                     ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 {Icon && <Icon className="w-3.5 h-3.5 text-indigo-600" />}
                 <span>{t.label}</span>
                 <span
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${
-                    tab === t.id
+                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold ${tab === t.id
                       ? 'bg-indigo-50 text-indigo-600'
                       : 'bg-slate-200 text-slate-600'
-                  }`}
+                    }`}
                 >
                   {t.count}
                 </span>
@@ -784,9 +782,8 @@ export const ProductsPage = () => {
                         </td>
                         <td>
                           <span
-                            className={`badge font-mono font-bold ${
-                              isLow ? 'badge-amber' : 'badge-emerald'
-                            }`}
+                            className={`badge font-mono font-bold ${isLow ? 'badge-amber' : 'badge-emerald'
+                              }`}
                           >
                             {stock} units
                           </span>
@@ -798,9 +795,8 @@ export const ProductsPage = () => {
                         </td>
                         <td>
                           <span
-                            className={`badge ${
-                              (p.status || 'ACTIVE') === 'ARCHIVED' ? 'badge-rose' : 'badge-emerald'
-                            }`}
+                            className={`badge ${(p.status || 'ACTIVE') === 'ARCHIVED' ? 'badge-rose' : 'badge-emerald'
+                              }`}
                           >
                             {p.status || 'ACTIVE'}
                           </span>
@@ -818,11 +814,10 @@ export const ProductsPage = () => {
                             {(role === 'OWNER' || role === 'BRANCH_MANAGER' || role === 'INVENTORY_STAFF') && (
                               <button
                                 onClick={() => handleToggleStatus(p)}
-                                className={`px-2.5 py-1 font-bold text-xs rounded-lg transition-colors ${
-                                  (p.status || 'ACTIVE') === 'ARCHIVED'
+                                className={`px-2.5 py-1 font-bold text-xs rounded-lg transition-colors ${(p.status || 'ACTIVE') === 'ARCHIVED'
                                     ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200'
                                     : 'bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200'
-                                }`}
+                                  }`}
                               >
                                 {(p.status || 'ACTIVE') === 'ARCHIVED' ? 'Activate' : 'Archive'}
                               </button>

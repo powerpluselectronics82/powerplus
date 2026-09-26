@@ -61,4 +61,8 @@ export const saleService = {
     const query = params.toString() ? `?${params.toString()}` : '';
     return await api.get(`/warrantyStatus${query}`);
   },
+
+  updateSaleCustomer: async (saleId, customerData) => {
+    return await api.patch(`/updateCustomer/${saleId}`, customerData);
+  },
 };

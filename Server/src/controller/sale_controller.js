@@ -1277,6 +1277,92 @@ const getWarrantyStatus = async (req, res) => {
   }
 };
 
+const updateSaleCustomerDetails = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+    const { saleId } = req.params;
+    const { customerName, customerPhone, customerAddress, customerGstin } = req.body;
+
+    if (!saleId) {
+      return res.status(400).json({ success: false, message: "saleId is required" });
+    }
+
+    const sale = await Sale.findOne({ _id: saleId, companyId });
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sale not found" });
+    }
+
+    // Branch manager check
+    if (req.user.role === "BRANCH_MANAGER" && req.user.branchId) {
+      if (String(sale.branchId) !== String(req.user.branchId)) {
+        return res.status(403).json({ success: false, message: "Access denied to sale from another branch" });
+      }
+    }
+
+    if (customerName !== undefined) {
+      sale.customerName = customerName.trim() || "Walk-in Customer";
+    }
+    if (customerPhone !== undefined) {
+      sale.customerPhone = customerPhone.trim();
+    }
+    if (customerAddress !== undefined) {
+      sale.customerAddress = customerAddress.trim();
+    }
+    if (customerGstin !== undefined) {
+      sale.customerGstin = customerGstin.trim().toUpperCase();
+    }
+
+    await sale.save();
+
+    // Keep payment records in sync with updated customer details
+    await Payment.updateMany(
+      { saleId: sale._id },
+      {
+        $set: {
+          customerName: sale.customerName,
+          customerPhone: sale.customerPhone,
+        },
+      }
+    );
+
+    // Invalidate Redis sales caches
+    await invalidateSaleCaches(companyId, sale.branchId, sale.cashierId);
+
+    // Audit log if logger is available
+    try {
+      if (typeof createAuditLog === "function") {
+        await createAuditLog({
+          companyId,
+          branchId: sale.branchId,
+          userId: req.user._id,
+          action: "UPDATE_SALE_CUSTOMER",
+          details: {
+            saleId: sale._id,
+            invoiceNumber: sale.invoiceNumber,
+            customerName: sale.customerName,
+            customerPhone: sale.customerPhone,
+            customerGstin: sale.customerGstin,
+          },
+        });
+      }
+    } catch (auditErr) {
+      console.warn("Audit log creation error:", auditErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Customer details updated successfully",
+      data: sale,
+    });
+  } catch (err) {
+    console.error("Update sale customer error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to update customer details",
+    });
+  }
+};
+
 module.exports = {
   createSale,
   getAllSales,
@@ -1288,6 +1374,7 @@ module.exports = {
   getCompanySummaryMonth,
   getCompanySummaryYear,
   getWarrantyStatus,
+  updateSaleCustomerDetails,
 };
 
 

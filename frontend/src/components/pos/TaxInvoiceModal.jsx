@@ -1,11 +1,12 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Printer, Download, CheckCircle, Building2, DollarSign, History } from 'lucide-react';
+import { X, Printer, Download, CheckCircle, Building2, DollarSign, History, Edit2, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { numberToWordsInINR } from '../../utils/numberToWords';
 import { PowerPlusLogo } from '../common/PowerPlusLogo';
 import { useBranch } from '../../context/BranchContext';
 import { useAppSelector } from '../../redux/hooks';
 import { ReceivePaymentModal } from './ReceivePaymentModal';
 import { PaymentHistoryModal } from './PaymentHistoryModal';
+import { saleService } from '../../services/saleService';
 
 export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaymentUpdated }) => {
   if (!isOpen || !sale) return null;
@@ -13,6 +14,17 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   const [activeSale, setActiveSale] = useState(sale);
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+
+  // Customer editing state
+  const [isEditingCustomer, setIsEditingCustomer] = useState(false);
+  const [customerFormData, setCustomerFormData] = useState({
+    customerName: '',
+    customerPhone: '',
+    customerAddress: '',
+    customerGstin: '',
+  });
+  const [isSavingCustomer, setIsSavingCustomer] = useState(false);
+  const [customerEditError, setCustomerEditError] = useState('');
 
   useEffect(() => {
     if (sale) {
@@ -243,6 +255,60 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
     return method;
   }, [activeSale, sale]);
 
+  const handleStartEditCustomer = () => {
+    setCustomerFormData({
+      customerName: customerName || '',
+      customerPhone: customerPhone || '',
+      customerAddress: customerAddress || '',
+      customerGstin: customerGstin || '',
+    });
+    setCustomerEditError('');
+    setIsEditingCustomer(true);
+  };
+
+  const handleSaveCustomer = async (e) => {
+    if (e) e.preventDefault();
+    if (!activeSale?._id) return;
+
+    setIsSavingCustomer(true);
+    setCustomerEditError('');
+
+    try {
+      const payload = {
+        customerName: customerFormData.customerName.trim(),
+        customerPhone: customerFormData.customerPhone.trim(),
+        customerAddress: customerFormData.customerAddress.trim(),
+        customerGstin: customerFormData.customerGstin.trim().toUpperCase(),
+      };
+
+      const res = await saleService.updateSaleCustomer(activeSale._id, payload);
+
+      if (res?.data?.success && res?.data?.data) {
+        setActiveSale((prev) => ({
+          ...prev,
+          ...res.data.data,
+          customerName: payload.customerName || prev.customerName,
+          customerPhone: payload.customerPhone,
+          customerAddress: payload.customerAddress,
+          customerGstin: payload.customerGstin,
+        }));
+        setIsEditingCustomer(false);
+        if (typeof onPaymentUpdated === 'function') {
+          onPaymentUpdated();
+        }
+      } else {
+        setCustomerEditError(res?.data?.message || 'Failed to update customer details');
+      }
+    } catch (err) {
+      console.error('Error updating customer details:', err);
+      setCustomerEditError(
+        err.response?.data?.message || err.message || 'Error updating customer details'
+      );
+    } finally {
+      setIsSavingCustomer(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-white print:overflow-visible">
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh] print:max-h-none print:shadow-none print:border-none print:overflow-visible print:w-full print:max-w-none">
@@ -356,28 +422,144 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
 
             {/* Bill To Section */}
             <div className="border-x border-b border-slate-800 p-3 text-[11px] space-y-1">
-              <span className="font-extrabold text-slate-400 uppercase tracking-widest block text-[10px]">
-                Bill To
-              </span>
-              <h4 className="font-extrabold text-slate-900 text-xs">{customerName}</h4>
-              {customerPhone && (
-                <p className="text-slate-600 font-mono">
-                  <span className="font-semibold text-slate-700">Contact No : </span>
-                  {customerPhone}
-                </p>
-              )}
-              <p className="text-slate-600 leading-tight">
-                <span className="font-semibold text-slate-700">Buyer Address : </span>
-                {customerAddress || 'N/A'}
-              </p>
-              <p className="text-slate-900 font-mono font-bold">
-                <span className="font-semibold text-slate-700 font-sans">Buyer GSTIN : </span>
-                {customerGstin ? (
-                  <strong className="font-black text-slate-950 font-mono tracking-wider">{customerGstin}</strong>
-                ) : (
-                  <span className="text-slate-500 font-sans font-medium">URP (Unregistered Person)</span>
+              <div className="flex items-center justify-between">
+                <span className="font-extrabold text-slate-400 uppercase tracking-widest block text-[10px]">
+                  Bill To
+                </span>
+                {!isEditingCustomer && (
+                  <button
+                    type="button"
+                    onClick={handleStartEditCustomer}
+                    className="print:hidden inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors cursor-pointer"
+                    title="Edit Customer Details (Name, Phone, Address, GSTIN)"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span>Edit Details</span>
+                  </button>
                 )}
-              </p>
+              </div>
+
+              {/* Editing Form (Screen Only) */}
+              {isEditingCustomer && (
+                <form onSubmit={handleSaveCustomer} className="space-y-2 py-1 print:hidden bg-slate-50/80 p-2.5 rounded-lg border border-slate-300">
+                  {customerEditError && (
+                    <div className="p-1.5 bg-red-50 border border-red-200 text-red-700 rounded text-[10px] flex items-center gap-1.5 font-sans">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>{customerEditError}</span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                        Buyer / Customer Name *
+                      </label>
+                      <input
+                        type="text"
+                        value={customerFormData.customerName}
+                        onChange={(e) => setCustomerFormData((prev) => ({ ...prev, customerName: e.target.value }))}
+                        required
+                        placeholder="e.g. John Doe / Business Name"
+                        className="w-full text-xs font-semibold px-2 py-1 bg-white border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                        Contact No
+                      </label>
+                      <input
+                        type="text"
+                        value={customerFormData.customerPhone}
+                        onChange={(e) => setCustomerFormData((prev) => ({ ...prev, customerPhone: e.target.value }))}
+                        placeholder="e.g. 9876543210"
+                        className="w-full text-xs font-mono px-2 py-1 bg-white border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                        Buyer Address
+                      </label>
+                      <input
+                        type="text"
+                        value={customerFormData.customerAddress}
+                        onChange={(e) => setCustomerFormData((prev) => ({ ...prev, customerAddress: e.target.value }))}
+                        placeholder="Customer Address, City, State, PIN"
+                        className="w-full text-xs px-2 py-1 bg-white border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[10px] font-bold text-slate-700 mb-0.5">
+                        Buyer GSTIN <span className="font-normal text-slate-500">(15-character GSTIN or leave blank for URP)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={customerFormData.customerGstin}
+                        onChange={(e) => setCustomerFormData((prev) => ({ ...prev, customerGstin: e.target.value.toUpperCase() }))}
+                        maxLength={15}
+                        placeholder="e.g. 10AAGCK1649C1Z4"
+                        className="w-full text-xs font-mono font-bold uppercase tracking-wider px-2 py-1 bg-white border border-slate-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-200">
+                    <button
+                      type="button"
+                      disabled={isSavingCustomer}
+                      onClick={() => {
+                        setIsEditingCustomer(false);
+                        setCustomerEditError('');
+                      }}
+                      className="px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-100 rounded border border-slate-300 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingCustomer}
+                      className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-bold text-white bg-blue-600 hover:bg-blue-700 rounded shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSavingCustomer ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3 h-3" />
+                          <span>Save Details</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Formatted Customer Details Display (Visible when not editing, and always rendered for print) */}
+              <div className={isEditingCustomer ? 'hidden print:block space-y-1' : 'space-y-1'}>
+                <h4 className="font-extrabold text-slate-900 text-xs">{customerName}</h4>
+                {customerPhone && (
+                  <p className="text-slate-600 font-mono">
+                    <span className="font-semibold text-slate-700">Contact No : </span>
+                    {customerPhone}
+                  </p>
+                )}
+                <p className="text-slate-600 leading-tight">
+                  <span className="font-semibold text-slate-700">Buyer Address : </span>
+                  {customerAddress || 'N/A'}
+                </p>
+                <p className="text-slate-900 font-mono font-bold">
+                  <span className="font-semibold text-slate-700 font-sans">Buyer GSTIN : </span>
+                  {customerGstin ? (
+                    <strong className="font-black text-slate-950 font-mono tracking-wider">{customerGstin}</strong>
+                  ) : (
+                    <span className="text-slate-500 font-sans font-medium">URP (Unregistered Person)</span>
+                  )}
+                </p>
+              </div>
             </div>
 
             {/* Payment Remark Subject Banner */}

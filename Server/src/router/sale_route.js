@@ -14,9 +14,11 @@ const {
   getCompanySummaryMonth,
   getCompanySummaryYear,
   getWarrantyStatus,
+  updateSaleCustomerDetails,
 } = require("../controller/sale_controller");
 
 router.post("/create", auth, allowed(["OWNER", "BRANCH_MANAGER", "CASHIER"]), apiLimiter, createSale);
+router.patch("/updateCustomer/:saleId", auth, allowed(["OWNER", "BRANCH_MANAGER", "CASHIER"]), apiLimiter, updateSaleCustomerDetails);
 router.get("/allSales", auth, isOwner, apiLimiter, getAllSales);
 router.get("/branchSales/:branchId", auth, ownerOrBranchManager, apiLimiter, getBranchSales);
 router.get("/branchSales/:branchId/month", auth, ownerOrBranchManager, apiLimiter, getBranchMonthlySales);
