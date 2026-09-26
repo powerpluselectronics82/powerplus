@@ -115,6 +115,7 @@ const createSale = async (req, res) => {
       customerName,
       customerPhone,
       customerAddress,
+      customerGstin,
       tollFreeNumber: topTollFree,
       items,
       paymentMethod,
@@ -126,6 +127,8 @@ const createSale = async (req, res) => {
       cashierId,
       cashierName,
     } = req.body;
+
+    console.log("executeSaleLogic received req.body.customerGstin:", customerGstin || req.body?.customerGstin);
 
     if (!Array.isArray(items) || items.length === 0) {
       throw new Error("Sale items array is required and cannot be empty");
@@ -485,6 +488,7 @@ const createSale = async (req, res) => {
           customerName: customerName || 'Walk-in Customer',
           customerPhone: customerPhone || '9999999999',
           customerAddress: customerAddress || '',
+          customerGstin: (customerGstin || req.body?.customerGstin || req.body?.customerGSTIN || req.body?.buyerGstin || req.body?.gstin || req.body?.customerGst || req.body?.customerGstNo || '') ? String(customerGstin || req.body?.customerGstin || req.body?.customerGSTIN || req.body?.buyerGstin || req.body?.gstin || req.body?.customerGst || req.body?.customerGstNo).trim().toUpperCase() : '',
           tollFreeNumber: topTollFree || (saleItems.find(i => i.tollFreeNumber)?.tollFreeNumber) || '',
           items: saleItems,
           subtotal,
@@ -509,6 +513,8 @@ const createSale = async (req, res) => {
       ],
       createOpts
     );
+
+    console.log("Sale created in MongoDB with customerGstin:", sale[0]?.customerGstin);
 
     // If initial payment was made, create the Payment collection record(s)
     if (finalPaidAmount > 0) {

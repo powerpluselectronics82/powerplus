@@ -31,7 +31,7 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
   const [formData, setFormData] = useState({
     branchId: selectedBranchId || '',
     barcode: '',
-    quantity: 1,
+    quantity: '',
     purchasePrice: 0,
     manufacturingDate: '',
     expiryDate: '',
@@ -136,6 +136,10 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
   if (!isOpen) return null;
 
   const handleQuantityChange = (qty) => {
+    if (qty === '') {
+      setFormData((prev) => ({ ...prev, quantity: '', serialNumbers: [] }));
+      return;
+    }
     const count = Math.max(1, parseInt(qty) || 1);
     setFormData((prev) => {
       let currentSerials = [...prev.serialNumbers];
@@ -473,6 +477,7 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                 required
                 value={formData.quantity}
                 onChange={(e) => handleQuantityChange(e.target.value)}
+                placeholder="Qty"
                 className="input-tactile font-mono text-center font-bold"
               />
             </div>

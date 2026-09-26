@@ -201,6 +201,13 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
     sale.customer?.address ||
     sale.address ||
     '';
+  const customerGstin =
+    activeSale.customerGstin ||
+    sale.customerGstin ||
+    activeSale.buyerGstin ||
+    sale.buyerGstin ||
+    sale.customer?.gstin ||
+    '';
   const cashierName = activeSale.cashierName || sale.cashierName || 'Cashier';
   const branchName = activeSale.branchName || sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
   const branchCode = targetBranch?.code || branch?.code || 'BR01';
@@ -362,6 +369,14 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                 <span className="font-semibold text-slate-700">Buyer Address : </span>
                 {customerAddress || 'N/A'}
               </p>
+              <p className="text-slate-900 font-mono font-bold">
+                <span className="font-semibold text-slate-700 font-sans">Buyer GSTIN : </span>
+                {customerGstin ? (
+                  <strong className="font-black text-slate-950 font-mono tracking-wider">{customerGstin}</strong>
+                ) : (
+                  <span className="text-slate-500 font-sans font-medium">URP (Unregistered Person)</span>
+                )}
+              </p>
             </div>
 
             {/* Payment Remark Subject Banner */}
@@ -416,6 +431,13 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                     const rawTotal = Number(item.totalAmount || (sellingPrice * qty) || 0);
                     const lineTotal = isNaN(rawTotal) ? 0 : rawTotal;
 
+                    const cgstPct = item.cgstRate !== undefined && item.cgstRate !== null && item.cgstRate !== ''
+                      ? Number(item.cgstRate)
+                      : (cgstAmt > 0 && (sellingPrice * qty) > 0 ? Number(((cgstAmt / (sellingPrice * qty)) * 100).toFixed(1)) : 0);
+                    const sgstPct = item.sgstRate !== undefined && item.sgstRate !== null && item.sgstRate !== ''
+                      ? Number(item.sgstRate)
+                      : (sgstAmt > 0 && (sellingPrice * qty) > 0 ? Number(((sgstAmt / (sellingPrice * qty)) * 100).toFixed(1)) : 0);
+
                     return (
                       <tr key={index} className="align-top hover:bg-slate-50">
                         <td className="p-2 border-r border-slate-800 text-center font-mono">{index + 1}</td>
@@ -450,11 +472,15 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                         <td className="p-2 border-r border-slate-800 text-right font-mono">
                           {sellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                         </td>
-                        <td className="p-1 border-r border-slate-800 text-center font-mono">9%</td>
+                        <td className="p-1 border-r border-slate-800 text-center font-mono">
+                          {cgstPct > 0 ? `${cgstPct}%` : '0%'}
+                        </td>
                         <td className="p-1 border-r border-slate-800 text-right font-mono">
                           {cgstAmt.toFixed(2)}
                         </td>
-                        <td className="p-1 border-r border-slate-800 text-center font-mono">9%</td>
+                        <td className="p-1 border-r border-slate-800 text-center font-mono">
+                          {sgstPct > 0 ? `${sgstPct}%` : '0%'}
+                        </td>
                         <td className="p-1 border-r border-slate-800 text-right font-mono">
                           {sgstAmt.toFixed(2)}
                         </td>

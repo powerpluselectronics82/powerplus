@@ -196,11 +196,10 @@ export const DuePaymentsPage = () => {
                 setStatusFilter(tab.id);
                 setPage(1);
               }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                statusFilter === tab.id
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${statusFilter === tab.id
                   ? 'bg-slate-900 text-white shadow-sm'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+                }`}
             >
               {tab.label}
             </button>
@@ -301,11 +300,10 @@ export const DuePaymentsPage = () => {
                       {/* Status */}
                       <td className="p-3.5 text-center">
                         <span
-                          className={`inline-block px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
-                            sale.paymentStatus === 'PARTIAL'
+                          className={`inline-block px-2.5 py-1 rounded-lg text-[11px] font-bold border ${sale.paymentStatus === 'PARTIAL'
                               ? 'bg-amber-50 text-amber-800 border-amber-200'
                               : 'bg-rose-50 text-rose-800 border-rose-200'
-                          }`}
+                            }`}
                         >
                           {sale.paymentStatus || 'UNPAID'}
                         </span>

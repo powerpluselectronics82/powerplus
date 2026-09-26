@@ -503,11 +503,10 @@ export const DashboardPage = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setWarrantyFilter('EXPIRING_SOON')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 ${
-              warrantyFilter === 'EXPIRING_SOON'
+            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 ${warrantyFilter === 'EXPIRING_SOON'
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/80'
-            }`}
+              }`}
           >
             <span>⚠️ Expiring in 1 Month</span>
             <span className="px-1.5 py-0.5 rounded-md bg-amber-900/20 text-[10px] font-mono">
@@ -517,11 +516,10 @@ export const DashboardPage = () => {
 
           <button
             onClick={() => setWarrantyFilter('ACTIVE')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 ${
-              warrantyFilter === 'ACTIVE'
+            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 ${warrantyFilter === 'ACTIVE'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80'
-            }`}
+              }`}
           >
             <span>✅ Active Warranty</span>
             <span className="px-1.5 py-0.5 rounded-md bg-emerald-900/20 text-[10px] font-mono">
@@ -590,10 +588,10 @@ export const DashboardPage = () => {
                     <td className="font-mono text-slate-700 font-semibold">
                       {item.expiryDate
                         ? new Date(item.expiryDate).toLocaleDateString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            year: 'numeric',
-                          })
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric',
+                        })
                         : 'N/A'}
                     </td>
                     <td className="text-right">

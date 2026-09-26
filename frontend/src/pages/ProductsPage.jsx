@@ -37,6 +37,21 @@ export const ProductsPage = () => {
   const { role } = useAuth();
   const { selectedBranchId, currentBranch } = useBranch();
 
+  const normRole = String(role || '').toUpperCase().trim();
+  const canIntake =
+    !normRole ||
+    normRole === 'OWNER' ||
+    normRole === 'ADMIN' ||
+    normRole === 'BRANCH_MANAGER' ||
+    normRole === 'MANAGER' ||
+    normRole === 'INVENTORY_STAFF';
+  const canCatBrand =
+    !normRole ||
+    normRole === 'OWNER' ||
+    normRole === 'ADMIN' ||
+    normRole === 'BRANCH_MANAGER' ||
+    normRole === 'MANAGER';
+
   const currentMonthStr = new Date().toISOString().slice(0, 7);
 
   // Redux Cached State
@@ -407,7 +422,7 @@ export const ProductsPage = () => {
             Monthly Intake Report
           </button>
 
-          {(role === 'OWNER' || role === 'BRANCH_MANAGER') && (
+          {canCatBrand && (
             <button
               onClick={() => setIsCatBrandModalOpen(true)}
               className="btn-secondary py-2.5 px-3.5 text-xs font-bold"
@@ -416,7 +431,7 @@ export const ProductsPage = () => {
             </button>
           )}
 
-          {(role === 'OWNER' || role === 'BRANCH_MANAGER' || role === 'INVENTORY_STAFF') && (
+          {canIntake && (
             <button
               onClick={() => setIsUnifiedIntakeOpen(true)}
               className="btn-primary py-2.5 px-4 text-xs font-black shadow-md shadow-indigo-500/20 flex items-center gap-2"
@@ -920,11 +935,13 @@ export const ProductsPage = () => {
       )}
 
       {/* Unified Global Product & Stock Intake Modal */}
-      <UnifiedStockIntakeModal
-        isOpen={isUnifiedIntakeOpen}
-        onClose={() => setIsUnifiedIntakeOpen(false)}
-        onRefresh={loadData}
-      />
+      {isUnifiedIntakeOpen && (
+        <UnifiedStockIntakeModal
+          isOpen={isUnifiedIntakeOpen}
+          onClose={() => setIsUnifiedIntakeOpen(false)}
+          onRefresh={loadData}
+        />
+      )}
 
       {/* Add Global Catalog Product Modal */}
       <AddProductModal

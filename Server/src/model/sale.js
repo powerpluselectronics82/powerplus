@@ -45,6 +45,13 @@ const SaleSchema = new mongoose.Schema(
       default: "",
     },
 
+    customerGstin: {
+      type: String,
+      default: "",
+      trim: true,
+      uppercase: true,
+    },
+
     items: [
       {
         productId: {
@@ -61,8 +68,8 @@ const SaleSchema = new mongoose.Schema(
           type: String,
           default: "",
           trim: true,
-       },
-       brand: {
+        },
+        brand: {
           type: String,
           default: "",
           trim: true,
@@ -84,7 +91,7 @@ const SaleSchema = new mongoose.Schema(
           type: String,
           trim: true,
         },
-        
+
         tollFreeNumber: {
           type: String,
           default: "",

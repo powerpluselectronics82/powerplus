@@ -7,6 +7,7 @@ export const CartProvider = ({ children }) => {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [customerGstin, setCustomerGstin] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [completedSale, setCompletedSale] = useState(null);
   const [notification, setNotification] = useState(null);
@@ -185,6 +186,7 @@ export const CartProvider = ({ children }) => {
     setCustomerName('');
     setCustomerPhone('');
     setCustomerAddress('');
+    setCustomerGstin('');
     setPaymentMethod('CASH');
   };
 
@@ -232,13 +234,16 @@ export const CartProvider = ({ children }) => {
       const price = getItemPrice(item.product, item);
       const discountAmount = getItemDiscount(item.product, item);
       const qty = Number(item.unit || 1);
-      const gstRate = Number(item.product?.cgstRate || 0) + Number(item.product?.sgstRate || 0) || Number(item.product?.gstRate || 18);
+      const cgst = item.product?.cgstRate !== undefined && item.product?.cgstRate !== null && item.product?.cgstRate !== '' ? Number(item.product.cgstRate) : 0;
+      const sgst = item.product?.sgstRate !== undefined && item.product?.sgstRate !== null && item.product?.sgstRate !== '' ? Number(item.product.sgstRate) : 0;
+      const directGst = item.product?.gstRate !== undefined && item.product?.gstRate !== null && item.product?.gstRate !== '' ? Number(item.product.gstRate) : 0;
+      const gstRate = (cgst + sgst) > 0 ? (cgst + sgst) : directGst;
 
       const lineSubtotal = price * qty;
       subtotal += lineSubtotal;
       totalDiscount += discountAmount * qty;
 
-      // Calculate GST tax portion
+      // Calculate GST tax portion (0 if product has no GST)
       const tax = (lineSubtotal * gstRate) / 100;
       taxableValue += tax;
     });
@@ -270,6 +275,8 @@ export const CartProvider = ({ children }) => {
         setCustomerPhone,
         customerAddress,
         setCustomerAddress,
+        customerGstin,
+        setCustomerGstin,
         paymentMethod,
         setPaymentMethod,
         completedSale,

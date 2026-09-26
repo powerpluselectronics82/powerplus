@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -43,14 +43,60 @@ import {
   fetchBrands,
 } from '../../redux/slices/productsSlice';
 
+const EMPTY_ARRAY = [];
+
+const getInitialFormData = (targetBranchId = '') => ({
+  // Core Product Details
+  barcode: '',
+  name: '',
+  modelNumber: '',
+  hsnCode: '',
+  description: '',
+  category: '',
+  brand: '',
+  isSerialized: false,
+  cgstRate: 9,
+  sgstRate: 9,
+  igstRate: 0,
+  minStockLevel: 2,
+
+  // Full Technical Specifications
+  specifications: {
+    color: '',
+    warranty: '',
+    tollFreeNumber: '',
+    dimensions: '',
+    weight: '',
+    powerConsumption: '',
+    voltage: '',
+    displaySize: '',
+    resolution: '',
+    ram: '',
+    storage: '',
+    batteryCapacity: '',
+    processor: '',
+    operatingSystem: '',
+    camera: '',
+    speaker: '',
+    connectivity: '',
+    features: '',
+  },
+
+  // Stock Intake details
+  branchId: targetBranchId,
+  quantity: '',
+  purchasePrice: '',
+  serialNumbers: [''],
+});
+
 export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
   const dispatch = useAppDispatch();
   const { user, role } = useAuth();
   const { selectedBranchId, currentBranch, branches: contextBranches } = useBranch();
-  const reduxBranches = useAppSelector((state) => state.branches?.branches || []);
+  const reduxBranches = useAppSelector((state) => state.branches?.branches) || EMPTY_ARRAY;
 
   // Compute effective branches combining Context, Redux, and user.branchId fallback
-  const branches = (() => {
+  const branches = useMemo(() => {
     const map = new Map();
     (contextBranches || []).forEach((b) => b && b._id && map.set(String(b._id), b));
     (reduxBranches || []).forEach(
@@ -67,13 +113,20 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
       });
     }
     return Array.from(map.values());
-  })();
+  }, [contextBranches, reduxBranches, currentBranch, user?.branchId, user?.branchName]);
 
   const isOwner = !role || role.toUpperCase() === 'OWNER' || role.toUpperCase() === 'ADMIN';
 
-  const { catalogProducts, categories: reduxCategories, brands: reduxBrands } = useAppSelector(
-    (state) => state.products
-  );
+  const catalogProducts = useAppSelector((state) => state.products?.catalogProducts) || EMPTY_ARRAY;
+  const reduxCategories = useAppSelector((state) => state.products?.categories) || EMPTY_ARRAY;
+  const reduxBrands = useAppSelector((state) => state.products?.brands) || EMPTY_ARRAY;
+
+  const targetBranchId =
+    currentBranch?._id ||
+    selectedBranchId ||
+    user?.branchId ||
+    branches?.[0]?._id ||
+    '';
 
   // Active lookup & detection states
   const [query, setQuery] = useState('');
@@ -97,49 +150,19 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
   const [specsActiveTab, setSpecsActiveTab] = useState('general');
 
   // Unified Form Data (No MRP, No discountType, No discountValue)
-  const [formData, setFormData] = useState({
-    // Core Product Details
-    barcode: '',
-    name: '',
-    modelNumber: '',
-    hsnCode: '',
-    description: '',
-    category: '',
-    brand: '',
-    isSerialized: false,
-    cgstRate: 9,
-    sgstRate: 9,
-    igstRate: 0,
-    minStockLevel: 2,
+  const [formData, setFormData] = useState(() => getInitialFormData(targetBranchId));
 
-    // Full Technical Specifications
-    specifications: {
-      color: '',
-      warranty: '',
-      tollFreeNumber: '',
-      dimensions: '',
-      weight: '',
-      powerConsumption: '',
-      voltage: '',
-      displaySize: '',
-      resolution: '',
-      ram: '',
-      storage: '',
-      batteryCapacity: '',
-      processor: '',
-      operatingSystem: '',
-      camera: '',
-      speaker: '',
-      connectivity: '',
-      features: '',
-    },
-
-    // Stock Intake details
-    branchId: user?.branchId || selectedBranchId || currentBranch?._id || '',
-    quantity: 1,
-    purchasePrice: 0,
-    serialNumbers: [''],
-  });
+  const resetState = () => {
+    setQuery('');
+    setSelectedProduct(null);
+    setIsExistingProduct(false);
+    setError('');
+    setSuccessMsg('');
+    setIsDropdownOpen(false);
+    setBulkSerialText('');
+    setSpecsActiveTab('general');
+    setFormData(getInitialFormData(targetBranchId));
+  };
 
   // Handle ESC key to close full-page workspace
   useEffect(() => {
@@ -166,24 +189,12 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
       }
 
       resetState();
-      setTimeout(() => {
+      const timer = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 150);
+      return () => clearTimeout(timer);
     }
-  }, [isOpen, dispatch]);
-
-  // Sync default branch
-  useEffect(() => {
-    const defaultBranchId =
-      user?.branchId ||
-      selectedBranchId ||
-      currentBranch?._id ||
-      (branches?.[0]?._id ?? '');
-    setFormData((prev) => ({
-      ...prev,
-      branchId: prev.branchId || defaultBranchId,
-    }));
-  }, [user, selectedBranchId, currentBranch, branches]);
+  }, [isOpen]);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -195,61 +206,6 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  const resetState = () => {
-    setQuery('');
-    setSelectedProduct(null);
-    setIsExistingProduct(false);
-    setError('');
-    setSuccessMsg('');
-    setIsDropdownOpen(false);
-    setBulkSerialText('');
-    setSpecsActiveTab('general');
-
-    const defaultBranchId =
-      user?.branchId ||
-      selectedBranchId ||
-      currentBranch?._id ||
-      (branches?.[0]?._id ?? '');
-    setFormData({
-      barcode: '',
-      name: '',
-      modelNumber: '',
-      hsnCode: '',
-      description: '',
-      category: '',
-      brand: '',
-      isSerialized: false,
-      cgstRate: 9,
-      sgstRate: 9,
-      igstRate: 0,
-      minStockLevel: 2,
-      specifications: {
-        color: '',
-        warranty: '',
-        tollFreeNumber: '',
-        dimensions: '',
-        weight: '',
-        powerConsumption: '',
-        voltage: '',
-        displaySize: '',
-        resolution: '',
-        ram: '',
-        storage: '',
-        batteryCapacity: '',
-        processor: '',
-        operatingSystem: '',
-        camera: '',
-        speaker: '',
-        connectivity: '',
-        features: '',
-      },
-      branchId: defaultBranchId,
-      quantity: 1,
-      purchasePrice: 0,
-      serialNumbers: [''],
-    });
-  };
 
   // Perform search / lookup when typing or scanning
   const handleQueryChange = (val) => {
@@ -376,8 +332,8 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
           ? specs.features.join(', ')
           : specs.features || '',
       },
-      purchasePrice: prod.purchasePrice || prev.purchasePrice || 0,
-      quantity: 1,
+      purchasePrice: prod.purchasePrice || prev.purchasePrice || '',
+      quantity: prod.isSerialized ? 1 : '',
       serialNumbers: prod.isSerialized ? [''] : [],
     }));
   };
@@ -455,13 +411,13 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
     setSuccessMsg('');
 
     const targetBranchId =
-      formData.branchId ||
-      user?.branchId ||
-      selectedBranchId ||
       currentBranch?._id ||
+      selectedBranchId ||
+      user?.branchId ||
+      formData.branchId ||
       branches[0]?._id;
     if (!targetBranchId) {
-      setError('Please select a target branch for stock intake');
+      setError('No active branch found. Please ensure a branch is active in the header.');
       return;
     }
 
@@ -471,9 +427,14 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
       return;
     }
 
+    if (formData.quantity === '' || formData.quantity === null || formData.quantity === undefined) {
+      setError('Intake stock quantity is required');
+      return;
+    }
+
     const intakeQty = Number(formData.quantity);
     if (!Number.isInteger(intakeQty) || intakeQty <= 0) {
-      setError('Intake quantity must be a positive integer');
+      setError('Intake stock quantity must be a positive integer (minimum 1 unit)');
       return;
     }
 
@@ -843,9 +804,11 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                   <datalist id="categories-list">
-                    {(reduxCategories || []).map((c) => (
-                      <option key={c._id || c.name} value={c.name} />
-                    ))}
+                    {(reduxCategories || []).map((c, idx) => {
+                      const name = typeof c === 'string' ? c : c?.name;
+                      const key = (typeof c === 'object' && c?._id) ? c._id : (name || `cat-${idx}`);
+                      return name ? <option key={key} value={name} /> : null;
+                    })}
                   </datalist>
                 </div>
 
@@ -862,9 +825,11 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900 disabled:bg-slate-100"
                   />
                   <datalist id="brands-list">
-                    {(reduxBrands || []).map((b) => (
-                      <option key={b._id || b.name} value={b.name} />
-                    ))}
+                    {(reduxBrands || []).map((b, idx) => {
+                      const name = typeof b === 'string' ? b : b?.name;
+                      const key = (typeof b === 'object' && b?._id) ? b._id : (name || `brand-${idx}`);
+                      return name ? <option key={key} value={name} /> : null;
+                    })}
                   </datalist>
                 </div>
 
@@ -895,6 +860,24 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     disabled={isExistingProduct}
                     placeholder="e.g. 8528"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-mono font-semibold text-slate-900 disabled:bg-slate-100"
+                  />
+                </div>
+
+                {/* Description */}
+                <div className="md:col-span-2 lg:col-span-3 space-y-1">
+                  <label className="font-bold text-slate-700 flex items-center justify-between">
+                    <span>Product Description</span>
+                    <span className="text-[10px] text-slate-400 font-normal">Optional</span>
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={formData.description}
+                    onChange={(e) =>
+                      setFormData((prev) => ({ ...prev, description: e.target.value }))
+                    }
+                    disabled={isExistingProduct}
+                    placeholder="Enter detailed product description, key highlights, or catalog notes..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50/50 focus:bg-white focus:border-indigo-600 outline-none text-xs font-semibold text-slate-900 disabled:bg-slate-100 disabled:text-slate-600 resize-none transition-all"
                   />
                 </div>
 
@@ -1325,68 +1308,47 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
               </p>
             </div>
 
-            {/* Target Branch Selector */}
+            {/* Target Branch: Always Current Active Branch */}
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-indigo-600" />
                   Target Branch for Intake <span className="text-rose-500">*</span>
                 </label>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  {isOwner && branches.length > 1 ? 'Select Branch' : 'Assigned Branch'}
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Current Branch
                 </span>
               </div>
 
-              {isOwner && branches.length > 1 ? (
-                <select
-                  value={
-                    formData.branchId ||
-                    user?.branchId ||
-                    selectedBranchId ||
-                    currentBranch?._id ||
-                    branches[0]?._id ||
-                    ''
-                  }
-                  onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value }))}
-                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-600 bg-slate-50/50 focus:bg-white outline-none text-xs font-bold text-slate-900 transition-colors"
-                >
-                  {branches.map((b) => (
-                    <option key={b._id} value={b._id}>
-                      {b.name} ({b.code || 'Main'})
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xs">
-                      <Building2 className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="font-extrabold text-xs text-slate-900 block leading-tight">
-                        {branches.find(
-                          (b) => b._id === (formData.branchId || user?.branchId || selectedBranchId)
-                        )?.name ||
-                          currentBranch?.name ||
-                          branches[0]?.name ||
-                          'My Assigned Branch'}
-                      </span>
-                      <span className="text-[10px] font-mono text-slate-500">
-                        Code:{' '}
-                        {branches.find(
-                          (b) => b._id === (formData.branchId || user?.branchId || selectedBranchId)
-                        )?.code ||
-                          currentBranch?.code ||
-                          branches[0]?.code ||
-                          'MAIN'}
-                      </span>
-                    </div>
+              <div className="p-3.5 rounded-2xl bg-indigo-50/50 border border-indigo-100 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold shadow-sm shadow-indigo-600/20">
+                    <Building2 className="w-4 h-4" />
                   </div>
-                  <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    Active Target
-                  </span>
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-900 block leading-tight">
+                      {currentBranch?.name ||
+                        branches.find((b) => b._id === (selectedBranchId || user?.branchId))?.name ||
+                        branches[0]?.name ||
+                        'Current Active Branch'}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-500">
+                      Code:{' '}
+                      {currentBranch?.code ||
+                        branches.find((b) => b._id === (selectedBranchId || user?.branchId))?.code ||
+                        branches[0]?.code ||
+                        'MAIN'}{' '}
+                      | Receiving Store
+                    </span>
+                  </div>
                 </div>
-              )}
+                <span className="text-[10px] font-black px-2.5 py-1 rounded-lg bg-white text-indigo-700 border border-indigo-200 shadow-xs">
+                  Active Target
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-500">
+                Stock intake is automatically received into the currently active branch.
+              </p>
             </div>
 
             {/* Purchase Price Input */}
@@ -1519,18 +1481,30 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
               </div>
             ) : (
               <div className="space-y-1.5">
-                <label className="font-bold text-slate-700 text-xs">
-                  Intake Stock Quantity <span className="text-rose-500">*</span>
+                <label className="font-bold text-slate-700 text-xs flex items-center justify-between">
+                  <span>
+                    Intake Stock Quantity <span className="text-rose-500">*</span>
+                  </span>
+                  {formData.quantity && (
+                    <span className="text-[10px] text-indigo-600 font-semibold font-mono">
+                      +{formData.quantity} Units
+                    </span>
+                  )}
                 </label>
                 <input
                   type="number"
                   min="1"
                   step="1"
                   value={formData.quantity}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, quantity: Math.max(1, parseInt(e.target.value) || 1) }))
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-600 bg-slate-50/50 focus:bg-white outline-none text-sm font-mono font-bold text-slate-900"
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData((prev) => ({
+                      ...prev,
+                      quantity: val === '' ? '' : Math.max(1, parseInt(val, 10) || 1),
+                    }));
+                  }}
+                  placeholder="Enter intake quantity (e.g. 10)"
+                  className="w-full px-3.5 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-600 bg-slate-50/50 focus:bg-white outline-none text-sm font-mono font-bold text-slate-900 placeholder:font-sans placeholder:font-normal placeholder:text-slate-400"
                 />
               </div>
             )}
@@ -1546,7 +1520,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     ₹{totalIntakeValuation.toLocaleString('en-IN')}
                   </div>
                   <span className="text-[11px] text-indigo-200">
-                    {formData.quantity} unit(s) @ ₹{Number(formData.purchasePrice || 0).toLocaleString('en-IN')}
+                    {formData.quantity || 0} unit(s) @ ₹{Number(formData.purchasePrice || 0).toLocaleString('en-IN')}
                   </span>
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-300 flex items-center justify-center border border-indigo-500/30">
@@ -1571,7 +1545,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                 </>
               ) : isExistingProduct ? (
                 <>
-                  <Boxes className="w-4 h-4" /> Receive Branch Inventory (+{formData.quantity} Units)
+                  <Boxes className="w-4 h-4" /> Receive Branch Inventory ({formData.quantity ? `+${formData.quantity} Units` : 'Enter Quantity'})
                 </>
               ) : (
                 <>

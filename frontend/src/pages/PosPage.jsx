@@ -54,6 +54,8 @@ export const PosPage = () => {
     setCustomerPhone,
     customerAddress,
     setCustomerAddress,
+    customerGstin,
+    setCustomerGstin,
     paymentMethod,
     setPaymentMethod,
     completedSale,
@@ -398,6 +400,7 @@ export const PosPage = () => {
       customerName: customerName || 'Walk-in Customer',
       customerPhone: customerPhone || '9999999999',
       customerAddress: customerAddress || '',
+      customerGstin: customerGstin ? String(customerGstin).trim().toUpperCase() : '',
       paidAmount: sanitizedPaid,
       dueAmount: calculatedDue,
       paymentStatus: calculatedStatus,
@@ -420,9 +423,14 @@ export const PosPage = () => {
     };
 
     try {
+      console.log('Sending Sale Payload with customerGstin:', payload.customerGstin);
       const res = await saleService.createSale(payload);
+      console.log('Sale Creation Response data:', res?.data);
       if (res.success && res.data) {
-        setCompletedSale(res.data);
+        setCompletedSale({
+          ...res.data,
+          customerGstin: res.data?.customerGstin || payload.customerGstin,
+        });
         clearCart();
         setIsCustomPaid(false);
         setPaidAmountInput('');
@@ -456,16 +464,14 @@ export const PosPage = () => {
       {notification && (
         <div className="fixed top-6 right-6 z-50 max-w-md w-full px-4 animate-in slide-in-from-top-3 fade-in duration-200 pointer-events-auto">
           <div
-            className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-md ${
-              notification.type === 'error'
-                ? 'bg-rose-50/95 border-rose-300 text-rose-900 shadow-rose-500/10'
-                : 'bg-amber-50/95 border-amber-300 text-amber-900 shadow-amber-500/10'
-            }`}
+            className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-md ${notification.type === 'error'
+              ? 'bg-rose-50/95 border-rose-300 text-rose-900 shadow-rose-500/10'
+              : 'bg-amber-50/95 border-amber-300 text-amber-900 shadow-amber-500/10'
+              }`}
           >
             <AlertTriangle
-              className={`w-5 h-5 shrink-0 mt-0.5 ${
-                notification.type === 'error' ? 'text-rose-600' : 'text-amber-600'
-              }`}
+              className={`w-5 h-5 shrink-0 mt-0.5 ${notification.type === 'error' ? 'text-rose-600' : 'text-amber-600'
+                }`}
             />
             <div className="flex-1">
               <h4 className="font-extrabold text-xs uppercase tracking-wide">
@@ -585,13 +591,12 @@ export const PosPage = () => {
                   <div
                     key={`${product._id || product.barcode || 'prod'}_${index}`}
                     onClick={() => handleSelectProduct(product)}
-                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                      isOutOfStock
-                        ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
-                        : isMaxInCart
+                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${isOutOfStock
+                      ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
+                      : isMaxInCart
                         ? 'bg-amber-50/40 border-amber-200/80 hover:border-amber-400'
                         : 'bg-white border-slate-200/80 hover:border-indigo-500 hover:shadow-md hover:-translate-y-0.5'
-                    }`}
+                      }`}
                   >
                     <div>
                       <div className="flex justify-between items-start mb-1 gap-1">
@@ -605,25 +610,24 @@ export const PosPage = () => {
                             </span>
                           )}
                           <span
-                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                              isOutOfStock
-                                ? 'bg-rose-100 text-rose-700'
-                                : isMaxInCart
+                            className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${isOutOfStock
+                              ? 'bg-rose-100 text-rose-700'
+                              : isMaxInCart
                                 ? 'bg-amber-100 text-amber-800'
                                 : inCartCount > 0
-                                ? 'bg-indigo-100 text-indigo-700'
-                                : totalStock <= (product.minStockLevel || 5)
-                                ? 'bg-amber-100 text-amber-700'
-                                : 'bg-emerald-100 text-emerald-700'
-                            }`}
+                                  ? 'bg-indigo-100 text-indigo-700'
+                                  : totalStock <= (product.minStockLevel || 5)
+                                    ? 'bg-amber-100 text-amber-700'
+                                    : 'bg-emerald-100 text-emerald-700'
+                              }`}
                           >
                             {isOutOfStock
                               ? 'Out of stock'
                               : isMaxInCart
-                              ? `Max in cart (${inCartCount}/${totalStock})`
-                              : inCartCount > 0
-                              ? `${availableToSelect} left (${inCartCount} in cart)`
-                              : `${totalStock} available`}
+                                ? `Max in cart (${inCartCount}/${totalStock})`
+                                : inCartCount > 0
+                                  ? `${availableToSelect} left (${inCartCount} in cart)`
+                                  : `${totalStock} available`}
                           </span>
                         </div>
                       </div>
@@ -641,13 +645,12 @@ export const PosPage = () => {
                       <button
                         type="button"
                         disabled={isOutOfStock || isMaxInCart}
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
-                          isMaxInCart
-                            ? 'bg-amber-100 text-amber-600 opacity-60 cursor-not-allowed'
-                            : isOutOfStock
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${isMaxInCart
+                          ? 'bg-amber-100 text-amber-600 opacity-60 cursor-not-allowed'
+                          : isOutOfStock
                             ? 'bg-slate-100 text-slate-400 opacity-50 cursor-not-allowed'
                             : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white'
-                        }`}
+                          }`}
                         title={isMaxInCart ? 'Maximum available stock already in cart' : 'Add to cart'}
                       >
                         <Plus className="w-4 h-4" />
@@ -713,6 +716,16 @@ export const PosPage = () => {
                   className="input-tactile text-xs py-1.5 pl-3"
                 />
               </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  maxLength={15}
+                  value={customerGstin}
+                  onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
+                  placeholder="Customer GSTIN (e.g. 22AAAAA0000A1Z5) - Optional"
+                  className="input-tactile text-xs py-1.5 pl-3 font-mono uppercase"
+                />
+              </div>
             </div>
 
             {/* Cart Items List */}
@@ -765,9 +778,8 @@ export const PosPage = () => {
                             × {unit} = <span className="font-bold text-slate-900">₹{(getItemPrice(product, { manualPrice }) * unit).toFixed(2)}</span>
                           </span>
                           {!product.isSerialized && Number.isFinite(itemMaxStock) && (
-                            <span className={`text-[10px] px-1 rounded font-sans font-semibold ${
-                              isAtMaxStock ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-200/70'
-                            }`}>
+                            <span className={`text-[10px] px-1 rounded font-sans font-semibold ${isAtMaxStock ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-200/70'
+                              }`}>
                               Stock: {itemMaxStock}
                             </span>
                           )}
@@ -801,11 +813,10 @@ export const PosPage = () => {
                                 }
                                 updateQuantity(product._id, unit + 1, product.branchInventoryId || product.purchasePrice);
                               }}
-                              className={`p-1 text-slate-600 ${
-                                isAtMaxStock
-                                  ? 'opacity-40 cursor-not-allowed hover:bg-transparent'
-                                  : 'hover:bg-slate-100'
-                              }`}
+                              className={`p-1 text-slate-600 ${isAtMaxStock
+                                ? 'opacity-40 cursor-not-allowed hover:bg-transparent'
+                                : 'hover:bg-slate-100'
+                                }`}
                               title={isAtMaxStock ? `Stock limit (${itemMaxStock}) reached` : 'Increase quantity'}
                             >
                               <Plus className="w-3 h-3" />
@@ -851,8 +862,8 @@ export const PosPage = () => {
                       type="button"
                       onClick={() => setPaymentMethod(m.id)}
                       className={`flex items-center justify-center gap-1 sm:gap-1.5 py-1.5 px-1 rounded-xl border text-xs font-bold transition-all ${isSelected
-                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                         }`}
                     >
                       <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -964,11 +975,10 @@ export const PosPage = () => {
                         setIsCustomPaid(false);
                         setPaidAmountInput('');
                       }}
-                      className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
-                        !isCustomPaid || Number(paidAmountInput) === totals.grandTotal
-                          ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${!isCustomPaid || Number(paidAmountInput) === totals.grandTotal
+                        ? 'bg-emerald-600 text-white border-emerald-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
                     >
                       Full Paid
                     </button>
@@ -978,11 +988,10 @@ export const PosPage = () => {
                         setIsCustomPaid(true);
                         setPaidAmountInput('0');
                       }}
-                      className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${
-                        isCustomPaid && Number(paidAmountInput) === 0
-                          ? 'bg-rose-600 text-white border-rose-600'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
-                      }`}
+                      className={`px-2 py-0.5 rounded-lg font-bold border transition-colors ${isCustomPaid && Number(paidAmountInput) === 0
+                        ? 'bg-rose-600 text-white border-rose-600'
+                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
                     >
                       Unpaid
                     </button>
@@ -1058,12 +1067,12 @@ export const PosPage = () => {
               {checkoutLoading
                 ? 'Processing Sale...'
                 : paymentMethod === 'SPLIT'
-                ? splitTotalPaid < totals.grandTotal
-                  ? `Checkout (Pay ₹${splitTotalPaid.toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - splitTotalPaid).toFixed(2)})`
-                  : `Checkout (Paid Full ₹${Math.min(splitTotalPaid, totals.grandTotal).toFixed(2)})`
-                : isCustomPaid && Number(paidAmountInput) < totals.grandTotal
-                ? `Checkout (Pay ₹${Math.max(0, Number(paidAmountInput) || 0).toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)})`
-                : `Checkout (₹${totals.grandTotal.toFixed(2)})`}
+                  ? splitTotalPaid < totals.grandTotal
+                    ? `Checkout (Pay ₹${splitTotalPaid.toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - splitTotalPaid).toFixed(2)})`
+                    : `Checkout (Paid Full ₹${Math.min(splitTotalPaid, totals.grandTotal).toFixed(2)})`
+                  : isCustomPaid && Number(paidAmountInput) < totals.grandTotal
+                    ? `Checkout (Pay ₹${Math.max(0, Number(paidAmountInput) || 0).toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)})`
+                    : `Checkout (₹${totals.grandTotal.toFixed(2)})`}
             </button>
           </div>
         </div>
@@ -1163,8 +1172,8 @@ export const PosPage = () => {
                             type="button"
                             onClick={() => setSerialInput(u.serialNumber)}
                             className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold transition-all border ${serialInput === u.serialNumber
-                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
-                                : 'bg-white text-slate-800 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50'
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                              : 'bg-white text-slate-800 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50'
                               }`}
                           >
                             {u.serialNumber}
@@ -1281,13 +1290,12 @@ export const PosPage = () => {
                       addItemByProduct(item, 1);
                       setPendingPriceGroup(null);
                     }}
-                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between ${
-                      isOutOfStock
-                        ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
-                        : isMaxInCart
+                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between ${isOutOfStock
+                      ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
+                      : isMaxInCart
                         ? 'bg-amber-50/70 border-amber-300 hover:border-amber-400'
                         : 'bg-slate-50 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50'
-                    }`}
+                      }`}
                   >
                     <div>
                       <div className="font-extrabold text-slate-900 text-xs">
@@ -1297,18 +1305,17 @@ export const PosPage = () => {
                         Available Stock: {tierStock} unit(s)
                       </div>
                     </div>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${
-                      isOutOfStock
-                        ? 'text-rose-600 bg-rose-50 border-rose-200'
-                        : isMaxInCart
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${isOutOfStock
+                      ? 'text-rose-600 bg-rose-50 border-rose-200'
+                      : isMaxInCart
                         ? 'text-amber-800 bg-amber-100 border-amber-200'
                         : 'text-indigo-600 bg-white border-slate-200'
-                    }`}>
+                      }`}>
                       {isOutOfStock
                         ? 'Out of Stock'
                         : isMaxInCart
-                        ? `Max in cart (${inCartForTier}/${tierStock})`
-                        : `${tierStock} Available`}
+                          ? `Max in cart (${inCartForTier}/${tierStock})`
+                          : `${tierStock} Available`}
                     </span>
                   </button>
                 );
