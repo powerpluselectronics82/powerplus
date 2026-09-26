@@ -268,7 +268,16 @@ const addBranch = async (req, res) => {
 
 const getAllBranches = async (req, res) => {
   try {
-    const companyId = req.user.companyId;
+    const companyId = req.user?.companyId;
+    if (!companyId) {
+      if (req.user?.branchId) {
+        const singleBranch = await Branch.findById(req.user.branchId).lean();
+        return res.status(200).json({ success: true, data: singleBranch ? [singleBranch] : [] });
+      }
+      const allActive = await Branch.find({ status: "ACTIVE" }).lean();
+      return res.status(200).json({ success: true, data: allActive });
+    }
+
     const cacheKey = getBranchesListKey(companyId);
 
     try {
@@ -298,13 +307,13 @@ const getAllBranches = async (req, res) => {
 const getBranchById = async (req, res) => {
   try {
     const { branchId } = req.params;
-    const companyId = req.user.companyId;
+    const companyId = req.user?.companyId;
 
-    if (!branchId) {
-      return res.status(400).json({ success: false, message: "branchId is required" });
+    if (!branchId || !mongoose.isValidObjectId(branchId)) {
+      return res.status(400).json({ success: false, message: "Valid branchId is required" });
     }
 
-    const cacheKey = getBranchCacheKey(companyId, branchId);
+    const cacheKey = getBranchCacheKey(companyId || "general", branchId);
 
     try {
       const cachedBranch = await redis.get(cacheKey);
@@ -315,7 +324,13 @@ const getBranchById = async (req, res) => {
       console.error("Redis get error:", redisError.message);
     }
 
-    const branch = await Branch.findOne({ _id: branchId, companyId }).lean();
+    let branch = companyId
+      ? await Branch.findOne({ _id: branchId, companyId }).lean()
+      : null;
+
+    if (!branch) {
+      branch = await Branch.findById(branchId).lean();
+    }
 
     if (!branch) {
       return res.status(404).json({ success: false, message: "Branch not found" });

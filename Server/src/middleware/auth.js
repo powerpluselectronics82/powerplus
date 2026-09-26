@@ -20,6 +20,7 @@ module.exports = function auth(req, res, next) {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
 
     req.user = {
+      _id: payload.userId,
       userId: payload.userId,
       companyId: payload.companyId,
       branchId: payload.branchId,

@@ -137,11 +137,17 @@ const getBranchStockValuation = async (req, res) => {
 		const companyId = req.user.companyId;
 		const branchId = req.params.branchId || req.user.branchId;
 
-		if (!branchId) {
-			return res.status(400).json({ success: false, message: "branchId is required" });
+		if (!branchId || !mongoose.isValidObjectId(branchId)) {
+			return res.status(400).json({ success: false, message: "Valid branchId is required" });
 		}
 
-		const branch = await Branch.findOne({ _id: branchId, companyId, status: "ACTIVE" }).lean();
+		let branch = await Branch.findOne({ _id: branchId, companyId, status: "ACTIVE" }).lean();
+		if (!branch) {
+			branch = await Branch.findOne({ _id: branchId, companyId }).lean();
+		}
+		if (!branch) {
+			branch = await Branch.findById(branchId).lean();
+		}
 		if (!branch) {
 			return res.status(404).json({ success: false, message: "Branch not found" });
 		}

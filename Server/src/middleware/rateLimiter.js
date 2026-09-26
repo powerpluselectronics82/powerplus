@@ -1,4 +1,4 @@
-const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
+const { rateLimit } = require("express-rate-limit");
 
 // ==========================================
 // 1. LOGIN / AUTH RATE LIMITER
@@ -7,13 +7,10 @@ const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 
 const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-
     limit: 10, // 10 requests per IP
-
+    validate: false,
     standardHeaders: "draft-8",
-
     legacyHeaders: false,
-
     message: {
         success: false,
         message: "Too many login attempts. Please try again after 15 minutes."
@@ -28,24 +25,17 @@ const loginLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-
     limit: 500, // 500 requests per user
-
-    validate: { keyGeneratorIpFallback: false },
-
+    validate: false,
     keyGenerator: (req) => {
-        // authMiddleware should add req.user
-        if (!req.user || !req.user._id) {
-            return typeof ipKeyGenerator === "function" ? ipKeyGenerator(req) : (req.ip || "unknown");
+        const uid = req.user?.userId || req.user?._id;
+        if (uid) {
+            return `user:${uid.toString()}`;
         }
-
-        return `user:${req.user._id.toString()}`;
+        return req.headers["x-forwarded-for"] || req.ip || "unknown";
     },
-
     standardHeaders: "draft-8",
-
     legacyHeaders: false,
-
     message: {
         success: false,
         message: "Too many requests. Please try again later."
