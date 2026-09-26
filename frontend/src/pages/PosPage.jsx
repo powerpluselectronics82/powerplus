@@ -404,7 +404,7 @@ export const PosPage = () => {
       customerAddress: customerAddress || '',
       customerGstin: customerGstin ? String(customerGstin).trim().toUpperCase() : '',
       exchangeAmount: totals.exchangeAmount || 0,
-      totalDiscount: (totals.totalDiscount || 0) + (totals.exchangeAmount || 0),
+      totalDiscount: totals.exchangeAmount || totals.totalDiscount || 0,
       paidAmount: sanitizedPaid,
       dueAmount: calculatedDue,
       paymentStatus: calculatedStatus,
@@ -434,8 +434,8 @@ export const PosPage = () => {
         setCompletedSale({
           ...res.data,
           customerGstin: res.data?.customerGstin || payload.customerGstin,
-          exchangeAmount: res.data?.exchangeAmount || payload.exchangeAmount,
-          totalDiscount: res.data?.totalDiscount || payload.totalDiscount,
+          exchangeAmount: payload.exchangeAmount,
+          totalDiscount: payload.totalDiscount,
         });
         clearCart();
         setIsCustomPaid(false);

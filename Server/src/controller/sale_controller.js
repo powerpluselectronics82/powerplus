@@ -407,10 +407,11 @@ const createSale = async (req, res) => {
       }
     }
 
-    const rawExchange = Number(req.body?.exchangeAmount || req.body?.exchangeOfferAmount || 0);
-    const extraDiscount = Number(req.body?.totalDiscount || req.body?.discount || 0);
-    const combinedDiscount = Math.max(0, totalDiscount + Math.max(0, rawExchange) + Math.max(0, extraDiscount));
-    totalDiscount = combinedDiscount;
+    const rawExchange = Math.max(0, Number(req.body?.exchangeAmount || req.body?.exchangeOfferAmount || 0));
+    const rawDiscount = Math.max(0, Number(req.body?.totalDiscount || req.body?.discount || 0));
+    // If rawDiscount already accounts for rawExchange, do NOT add them twice
+    const effectiveDiscount = rawDiscount >= rawExchange ? rawDiscount : (rawDiscount + rawExchange);
+    totalDiscount = Math.max(0, Number((totalDiscount + effectiveDiscount).toFixed(2)));
 
     const grandTotal = Math.max(0, Number((subtotal + taxableValue - totalDiscount).toFixed(2)));
 
