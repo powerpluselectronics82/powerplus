@@ -32,10 +32,7 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
     branchId: selectedBranchId || '',
     barcode: '',
     quantity: 1,
-    mrp: 0,
     purchasePrice: 0,
-    discountType: 'fixed',
-    discountValue: 0,
     manufacturingDate: '',
     expiryDate: '',
     serialNumbers: [''],
@@ -88,7 +85,6 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
     setFormData((prev) => ({
       ...prev,
       barcode: product.barcode,
-      mrp: product.mrp || prev.mrp || 0,
       purchasePrice: product.purchasePrice || prev.purchasePrice || 0,
       cgstRate: product.cgstRate || 9,
       sgstRate: product.sgstRate || 9,
@@ -214,8 +210,8 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
       return;
     }
 
-    if (Number(formData.mrp) < 0) {
-      setError('MRP cannot be negative');
+    if (Number(formData.purchasePrice) < 0) {
+      setError('Purchase price cannot be negative');
       setSubmitting(false);
       return;
     }
@@ -243,10 +239,7 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
       branchId: targetBranch,
       barcode: formData.barcode,
       quantity: Number(formData.quantity),
-      mrp: Number(formData.mrp),
       purchasePrice: Number(formData.purchasePrice),
-      discountType: formData.discountType,
-      discountValue: Number(formData.discountValue),
       ...(formData.manufacturingDate && { manufacturingDate: formData.manufacturingDate }),
       ...(formData.expiryDate && { expiryDate: formData.expiryDate }),
       serialNumbers: serials,
@@ -292,7 +285,7 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                 Receive Branch Stock Intake
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                Add physical inventory with MRP, discounts, expiry dates, and bulk serial number tracking
+                Add physical inventory with purchase cost, expiry dates, and bulk serial number tracking
               </p>
             </div>
           </div>
@@ -432,9 +425,9 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                           </div>
 
                           <div className="text-right shrink-0">
-                            {Number(p.mrp) > 0 && (
+                            {Number(p.purchasePrice) > 0 && (
                               <span className="font-mono font-extrabold text-indigo-600 block text-xs">
-                                ₹{Number(p.mrp).toLocaleString('en-IN')}
+                                ₹{Number(p.purchasePrice).toLocaleString('en-IN')}
                               </span>
                             )}
                             {isSelected && (
@@ -486,21 +479,6 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
 
             <div>
               <label className="block font-bold text-slate-700 uppercase mb-1">
-                MRP (₹) *
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                required
-                value={formData.mrp}
-                onChange={(e) => setFormData({ ...formData, mrp: e.target.value })}
-                className="input-tactile font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 uppercase mb-1">
                 Purchase Price (₹)
               </label>
               <input
@@ -509,37 +487,6 @@ export const AddStockModal = ({ isOpen, onClose, onRefresh }) => {
                 min="0"
                 value={formData.purchasePrice}
                 onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
-                className="input-tactile font-mono"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 uppercase mb-1">
-                Discount Type
-              </label>
-              <select
-                value={formData.discountType}
-                onChange={(e) => setFormData({ ...formData, discountType: e.target.value })}
-                className="input-tactile"
-              >
-                <option value="fixed">Fixed (₹)</option>
-                <option value="percentage">Percentage (%)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Discount Value & Dates */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 uppercase mb-1">
-                Discount Value ({formData.discountType === 'percentage' ? '%' : '₹'})
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={formData.discountValue}
-                onChange={(e) => setFormData({ ...formData, discountValue: e.target.value })}
                 className="input-tactile font-mono"
               />
             </div>

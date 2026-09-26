@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Lock, Mail, ArrowRight, ShieldCheck, Zap, UserCheck, AlertCircle } from 'lucide-react';
-import companyLogo from '../assets/logo.jpeg';
+import { PowerPlusLogo } from '../components/common/PowerPlusLogo';
 
 export const LoginPage = () => {
   const { login, loginAsDemo, loading, setOtpUser } = useAuth();
@@ -27,13 +27,8 @@ export const LoginPage = () => {
       <div className="max-w-md w-full relative z-10 space-y-6">
         {/* Header Logo */}
         <div className="text-center">
-          <div className="w-16 h-16 rounded-2xl bg-black mx-auto mb-3 flex items-center justify-center overflow-hidden border border-slate-700 shadow-xl">
-            <img src={companyLogo} alt="POWER PLUS ELECTRONICS Logo" className="w-full h-full object-contain" />
-          </div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight uppercase">
-            POWER PLUS ELECTRONICS
-          </h1>
-          <p className="text-xs font-medium text-slate-400 mt-1">
+          <PowerPlusLogo variant="login" />
+          <p className="text-xs font-medium text-slate-400 mt-3">
             Multi-Branch Enterprise POS & Inventory System
           </p>
         </div>

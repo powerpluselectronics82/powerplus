@@ -46,22 +46,6 @@ const inventoryUnitSchema = new mongoose.Schema(
       default: "available",
     },
 
-    mrp: {
-      type: Number,
-      default: 0,
-    },
-
-    discountType: {
-      type: String,
-      enum: ["percentage", "fixed"],
-      default: "fixed",
-    },
-
-    discountValue: {
-      type: Number,
-      default: 0,
-    },
-
     sellingPrice: {
       type: Number,
       default: 0,

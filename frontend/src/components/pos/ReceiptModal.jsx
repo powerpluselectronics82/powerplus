@@ -1,7 +1,7 @@
 import React from 'react';
 import { X, Printer, CheckCircle, Store, Phone, Calendar } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
-import companyLogo from '../../assets/logo.jpeg';
+import { PowerPlusLogo } from '../common/PowerPlusLogo';
 
 export const ReceiptModal = () => {
   const { completedSale, setCompletedSale } = useCart();
@@ -86,12 +86,7 @@ export const ReceiptModal = () => {
         {/* Printable Receipt Region */}
         <div id="printable-receipt" className="p-4 bg-white">
           <div className="text-center mb-6 border-b pb-4 border-slate-200">
-            <div className="w-14 h-14 rounded-xl bg-black flex items-center justify-center mx-auto mb-2 overflow-hidden border border-slate-700 shadow-sm">
-              <img src={companyLogo} alt="POWER PLUS ELECTRONICS Logo" className="w-full h-full object-contain" />
-            </div>
-            <h2 className="text-xl font-extrabold text-slate-900 uppercase tracking-tight">
-              POWER PLUS ELECTRONICS
-            </h2>
+            <PowerPlusLogo variant="receipt" className="mb-3" />
             <p className="text-xs text-slate-500 font-medium">
               Branch: {completedSale.branchName || 'Main Store'}
             </p>

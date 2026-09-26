@@ -27,15 +27,7 @@ import {
 
 const getProductPrice = (product) => {
   if (!product) return 0;
-  const mrp = Number(product.mrp || 0);
-  const discountVal = Number(product.discountValue || 0);
-  const discountAmount = product.discountType === 'percentage'
-    ? (mrp * discountVal) / 100
-    : discountVal;
-  if (discountAmount > 0) {
-    return Math.max(0, mrp - discountAmount);
-  }
-  return Number(product.sellingPrice ?? mrp);
+  return Number(product.sellingPrice ?? product.unitPrice ?? 0);
 };
 
 import { useAppDispatch, useAppSelector } from '../redux/hooks';
@@ -52,6 +44,8 @@ export const PosPage = () => {
     items,
     addItemByProduct,
     updateQuantity,
+    updateItemPrice,
+    getItemPrice,
     removeItem,
     clearCart,
     customerName,
@@ -151,13 +145,14 @@ export const PosPage = () => {
         return;
       }
 
-      const productMrp = Number(product.mrp || 0);
       const inCartCount = items
         .filter(
           (i) =>
             i.product._id === product._id &&
             !i.serialNumber &&
-            Number(i.product.mrp || 0) === productMrp
+            (product.branchInventoryId && i.product.branchInventoryId
+              ? i.product.branchInventoryId === product.branchInventoryId
+              : Number(i.product.purchasePrice || 0) === Number(product.purchasePrice || 0))
         )
         .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
@@ -223,10 +218,8 @@ export const PosPage = () => {
 
     const productWithUnitPrice = {
       ...pendingSerialProduct,
-      mrp: matchedUnit.mrp !== undefined && matchedUnit.mrp !== null ? matchedUnit.mrp : pendingSerialProduct.mrp,
-      discountType: matchedUnit.discountType || pendingSerialProduct.discountType,
-      discountValue: matchedUnit.discountValue !== undefined && matchedUnit.discountValue !== null ? matchedUnit.discountValue : pendingSerialProduct.discountValue,
       sellingPrice: matchedUnit.sellingPrice !== undefined && matchedUnit.sellingPrice !== null ? matchedUnit.sellingPrice : pendingSerialProduct.sellingPrice,
+      purchasePrice: matchedUnit.purchasePrice !== undefined && matchedUnit.purchasePrice !== null ? matchedUnit.purchasePrice : pendingSerialProduct.purchasePrice,
     };
 
     addItemByProduct(productWithUnitPrice, 1, cleanSerial);
@@ -251,10 +244,8 @@ export const PosPage = () => {
         if (u) {
           const productWithUnitPrice = {
             ...p,
-            mrp: u.mrp !== undefined && u.mrp !== null ? u.mrp : p.mrp,
-            discountType: u.discountType || p.discountType,
-            discountValue: u.discountValue !== undefined && u.discountValue !== null ? u.discountValue : p.discountValue,
             sellingPrice: u.sellingPrice !== undefined && u.sellingPrice !== null ? u.sellingPrice : p.sellingPrice,
+            purchasePrice: u.purchasePrice !== undefined && u.purchasePrice !== null ? u.purchasePrice : p.purchasePrice,
           };
           addItemByProduct(productWithUnitPrice, 1, u.serialNumber);
           setBarcodeInput('');
@@ -286,7 +277,9 @@ export const PosPage = () => {
             (i) =>
               i.product._id === prod._id &&
               !i.serialNumber &&
-              Number(i.product.mrp || 0) === Number(prod.mrp || 0)
+              (prod.branchInventoryId && i.product.branchInventoryId
+                ? i.product.branchInventoryId === prod.branchInventoryId
+                : Number(i.product.purchasePrice || 0) === Number(prod.purchasePrice || 0))
           )
           .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
@@ -344,7 +337,9 @@ export const PosPage = () => {
               (i) =>
                 i.product._id === productToAdd._id &&
                 !i.serialNumber &&
-                Number(i.product.mrp || 0) === Number(productToAdd.mrp || 0)
+                (productToAdd.branchInventoryId && i.product.branchInventoryId
+                  ? i.product.branchInventoryId === productToAdd.branchInventoryId
+                  : Number(i.product.purchasePrice || 0) === Number(productToAdd.purchasePrice || 0))
             )
             .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
@@ -416,7 +411,8 @@ export const PosPage = () => {
         productId: item.product._id,
         barcode: item.product.barcode,
         unit: item.unit,
-        mrp: item.product.mrp !== undefined && item.product.mrp !== null ? item.product.mrp : (item.product.sellingPrice || 0),
+        purchasePrice: item.product.purchasePrice || 0,
+        sellingPrice: getItemPrice(item.product, item),
         serialNumber: item.product.isSerialized ? (item.serialNumber || '') : '',
       })),
       cashierId: resolvedCashierId,
@@ -573,7 +569,9 @@ export const PosPage = () => {
                       (i) =>
                         i.product._id === product._id &&
                         !i.serialNumber &&
-                        Number(i.product.mrp || 0) === Number(product.mrp || 0)
+                        (product.branchInventoryId && i.product.branchInventoryId
+                          ? i.product.branchInventoryId === product.branchInventoryId
+                          : Number(i.product.purchasePrice || 0) === Number(product.purchasePrice || 0))
                     )
                     .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
@@ -582,7 +580,6 @@ export const PosPage = () => {
                 const isMaxInCart = !isOutOfStock && inCartCount >= totalStock;
 
                 const price = getProductPrice(product);
-                const mrp = Number(product.mrp || 0);
 
                 return (
                   <div
@@ -640,18 +637,6 @@ export const PosPage = () => {
                         <div className="font-extrabold text-indigo-600 text-sm font-mono">
                           ₹{price.toFixed(2)}
                         </div>
-                        {mrp > price && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] text-slate-400 font-mono line-through">
-                              ₹{mrp}
-                            </span>
-                            {product.discountValue > 0 && (
-                              <span className="text-[9px] font-extrabold text-emerald-600 bg-emerald-50 px-1 rounded">
-                                -{product.discountType === 'percentage' ? `${product.discountValue}%` : `₹${product.discountValue}`}
-                              </span>
-                            )}
-                          </div>
-                        )}
                       </div>
                       <button
                         type="button"
@@ -737,7 +722,7 @@ export const PosPage = () => {
                   Cart is empty. Click items or scan barcode to add.
                 </div>
               ) : (
-                items.map(({ product, unit, serialNumber }, index) => {
+                items.map(({ product, unit, serialNumber, manualPrice }, index) => {
                   const itemKey = serialNumber ? `${product._id}_${serialNumber}` : `${product._id}_${index}`;
                   const itemMaxStock = Number(
                     product.stock ??
@@ -762,8 +747,23 @@ export const PosPage = () => {
                             S/N: {serialNumber}
                           </span>
                         )}
-                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
-                          <span>₹{getProductPrice(product).toFixed(2)} × {unit}</span>
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-1.5 py-0.5 shadow-2xs">
+                            <span className="text-[10px] font-bold text-slate-400">₹</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={manualPrice !== undefined ? manualPrice : getItemPrice(product)}
+                              onChange={(e) => updateItemPrice(product._id, e.target.value, serialNumber, product.branchInventoryId || product.purchasePrice)}
+                              placeholder="Price"
+                              className="w-16 text-xs font-mono font-bold text-slate-800 focus:outline-none bg-transparent"
+                              title="Click to manually edit selling price"
+                            />
+                          </div>
+                          <span className="text-[11px] font-mono text-slate-500">
+                            × {unit} = <span className="font-bold text-slate-900">₹{(getItemPrice(product, { manualPrice }) * unit).toFixed(2)}</span>
+                          </span>
                           {!product.isSerialized && Number.isFinite(itemMaxStock) && (
                             <span className={`text-[10px] px-1 rounded font-sans font-semibold ${
                               isAtMaxStock ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-200/70'
@@ -779,7 +779,7 @@ export const PosPage = () => {
                           <div className="flex items-center bg-white border border-slate-200 rounded-lg">
                             <button
                               type="button"
-                              onClick={() => updateQuantity(product._id, unit - 1, product.mrp)}
+                              onClick={() => updateQuantity(product._id, unit - 1, product.branchInventoryId || product.purchasePrice)}
                               className="p-1 hover:bg-slate-100 text-slate-600"
                               title="Decrease quantity"
                             >
@@ -799,7 +799,7 @@ export const PosPage = () => {
                                   );
                                   return;
                                 }
-                                updateQuantity(product._id, unit + 1, product.mrp);
+                                updateQuantity(product._id, unit + 1, product.branchInventoryId || product.purchasePrice);
                               }}
                               className={`p-1 text-slate-600 ${
                                 isAtMaxStock
@@ -815,7 +815,7 @@ export const PosPage = () => {
 
                         <button
                           type="button"
-                          onClick={() => removeItem(product._id, serialNumber, product.mrp)}
+                          onClick={() => removeItem(product._id, serialNumber, product.branchInventoryId || product.purchasePrice)}
                           className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
                           title="Remove item"
                         >
@@ -1029,7 +1029,7 @@ export const PosPage = () => {
               </div>
               {totals.totalDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-bold">
-                  <span>MRP Discount:</span>
+                  <span>Discount:</span>
                   <span>-₹{totals.totalDiscount.toFixed(2)}</span>
                 </div>
               )}
@@ -1106,9 +1106,6 @@ export const PosPage = () => {
               </h4>
               <p className="text-xs text-slate-600 font-mono flex items-center gap-1.5">
                 <span>Price: ₹{getProductPrice(pendingSerialProduct).toFixed(2)}</span>
-                {pendingSerialProduct.mrp > getProductPrice(pendingSerialProduct) && (
-                  <span className="line-through text-slate-400 text-[11px]">₹{pendingSerialProduct.mrp}</span>
-                )}
               </p>
             </div>
 
@@ -1130,7 +1127,7 @@ export const PosPage = () => {
               // Group serial units by price tier
               const priceGroups = {};
               availableUnits.forEach((u) => {
-                const priceVal = u.sellingPrice ?? u.mrp ?? productPrice;
+                const priceVal = u.sellingPrice ?? productPrice;
                 const pKey = Number(priceVal).toFixed(2);
                 if (!priceGroups[pKey]) {
                   priceGroups[pKey] = [];
@@ -1223,7 +1220,7 @@ export const PosPage = () => {
         </div>
       )}
 
-      {/* Price Tier Selection Modal for Non-Serialized Products with Multiple MRPs */}
+      {/* Batch Selection Modal for Non-Serialized Products with Multiple Purchase Cost Batches */}
       {pendingPriceGroup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-4">
@@ -1234,10 +1231,10 @@ export const PosPage = () => {
                 </div>
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-sm">
-                    Select Price Tier (MRP)
+                    Select Inventory Batch
                   </h3>
                   <p className="text-[11px] text-slate-400 font-semibold">
-                    Multiple price batches found for {pendingPriceGroup[0]?.name}
+                    Multiple purchase cost batches found for {pendingPriceGroup[0]?.name}
                   </p>
                 </div>
               </div>
@@ -1257,7 +1254,9 @@ export const PosPage = () => {
                     (i) =>
                       i.product._id === item._id &&
                       !i.serialNumber &&
-                      Number(i.product.mrp || 0) === Number(item.mrp || 0)
+                      (item.branchInventoryId && i.product.branchInventoryId
+                        ? i.product.branchInventoryId === item.branchInventoryId
+                        : Number(i.product.purchasePrice || 0) === Number(item.purchasePrice || 0))
                   )
                   .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
@@ -1273,7 +1272,7 @@ export const PosPage = () => {
                     onClick={() => {
                       if (isMaxInCart) {
                         notify(
-                          `Cannot add more. Stock limit (${tierStock}) reached for "${item.name}" at MRP ₹${item.mrp}. Already have ${inCartForTier} in cart.`,
+                          `Cannot add more. Stock limit (${tierStock}) reached for "${item.name}". Already have ${inCartForTier} in cart.`,
                           'warning',
                           'Stock Limit Exceeded'
                         );
@@ -1292,15 +1291,10 @@ export const PosPage = () => {
                   >
                     <div>
                       <div className="font-extrabold text-slate-900 text-xs">
-                        MRP: <span className="font-mono text-indigo-600">₹{item.mrp || price}</span>
+                        Purchase Cost: <span className="font-mono text-indigo-600">₹{Number(item.purchasePrice || 0).toFixed(2)}</span>
                       </div>
                       <div className="text-[11px] text-slate-500 font-mono">
-                        Selling Price: ₹{price.toFixed(2)}
-                        {item.discountValue > 0 && (
-                          <span className="ml-1 text-emerald-600 font-bold text-[10px]">
-                            (-{item.discountType === 'percentage' ? `${item.discountValue}%` : `₹${item.discountValue}`})
-                          </span>
-                        )}
+                        Available Stock: {tierStock} unit(s)
                       </div>
                     </div>
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${

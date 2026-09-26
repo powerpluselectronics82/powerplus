@@ -13,7 +13,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import companyLogo from '../../assets/logo.jpeg';
+import { PowerPlusLogo } from '../common/PowerPlusLogo';
 
 export const DynamicSidebar = () => {
   const { role } = useAuth();
@@ -97,18 +97,8 @@ export const DynamicSidebar = () => {
     <aside className="w-64 bg-white/90 backdrop-blur-xl border-r border-slate-200/80 flex flex-col justify-between p-4 h-screen sticky top-0 shadow-sm z-30 shrink-0 select-none">
       <div className="flex flex-col h-full overflow-hidden">
         {/* Brand Logo Header */}
-        <div className="flex items-center gap-3 px-3 py-3 mb-4 border-b border-slate-100 shrink-0">
-          <div className="w-11 h-11 rounded-xl bg-black flex items-center justify-center overflow-hidden border border-slate-700 shadow-md shrink-0">
-            <img src={companyLogo} alt="POWER PLUS ELECTRONICS Logo" className="w-full h-full object-contain" />
-          </div>
-          <div>
-            <h1 className="font-extrabold text-slate-900 text-sm leading-tight tracking-tight uppercase">
-              POWER PLUS
-            </h1>
-            <p className="text-[9px] font-black text-orange-600 uppercase tracking-wider">
-              ELECTRONICS
-            </p>
-          </div>
+        <div className="pb-3 mb-3 border-b border-slate-100 shrink-0">
+          <PowerPlusLogo variant="sidebar" />
         </div>
 
         {/* Navigation Links */}

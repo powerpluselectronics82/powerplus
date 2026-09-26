@@ -214,11 +214,15 @@ const createSale = async (req, res) => {
         throw new Error(`Invalid quantity for ${product.name}`);
       }
 
+      const itemPurchasePrice = item.purchasePrice !== undefined && item.purchasePrice !== null && !isNaN(Number(item.purchasePrice))
+        ? Number(item.purchasePrice)
+        : null;
+
       let invQuery = BranchInventory.findOne({
         companyId,
         branchId,
         productId: product._id,
-        ...(item.mrp !== undefined && item.mrp !== null ? { mrp: Number(item.mrp) } : {}),
+        ...(itemPurchasePrice !== null ? { purchasePrice: itemPurchasePrice } : {}),
       });
       if (sessionOpt) invQuery = invQuery.session(sessionOpt);
       let inventory = await invQuery;
@@ -228,13 +232,18 @@ const createSale = async (req, res) => {
           companyId,
           branchId,
           productId: product._id,
-        });
+          stock: { $gt: 0 },
+        }).sort({ createdAt: -1 });
         if (sessionOpt) invQueryFallback = invQueryFallback.session(sessionOpt);
         inventory = await invQueryFallback;
       }
 
       if (!inventory) {
-        let invQueryFallback2 = BranchInventory.findOne({ productId: product._id });
+        let invQueryFallback2 = BranchInventory.findOne({
+          companyId,
+          branchId,
+          productId: product._id,
+        });
         if (sessionOpt) invQueryFallback2 = invQueryFallback2.session(sessionOpt);
         inventory = await invQueryFallback2;
       }
@@ -246,8 +255,7 @@ const createSale = async (req, res) => {
           branchId: branchId,
           productId: product._id,
           barcode: product.barcode,
-          mrp: Number(item.mrp || product.mrp || product.sellingPrice || 0),
-          purchasePrice: Number(product.purchasePrice || 0),
+          purchasePrice: itemPurchasePrice ?? Number(product.purchasePrice || 0),
           stock: product.isSerialized ? 1 : Math.max(saleQuantity, Number(product.Stock || 0)),
         });
         await inventory.save(createInvOpts);
@@ -306,7 +314,6 @@ const createSale = async (req, res) => {
                 barcode: product.barcode || serialNumber,
                 serialNumber,
                 purchasePrice: Number(item.purchasePrice || product.purchasePrice || 0),
-                mrp: Number(item.mrp || product.mrp || product.sellingPrice || 0),
                 status: "available",
               },
             ],
@@ -328,14 +335,13 @@ const createSale = async (req, res) => {
         }
       }
 
-      const mrp = Number(inventory.mrp || item.mrp || 0);
-      const discountValue = Number(inventory.discountValue || 0);
-      const discountAmount = inventory.discountType === "percentage"
-        ? (mrp * discountValue) / 100
-        : discountValue;
-      const sellingPrice = Math.max(0, mrp - discountAmount);
+      // Selling price is determined by manual price input, item unit price, or product selling price
+      const rawManualPrice = item.sellingPrice ?? item.unitPrice ?? item.price;
+      const sellingPrice = rawManualPrice !== undefined && rawManualPrice !== null && !isNaN(Number(rawManualPrice))
+        ? Math.max(0, Number(rawManualPrice))
+        : Number(product.sellingPrice || 0);
       const baseAmount = sellingPrice * saleQuantity;
-      const discount = discountAmount * saleQuantity;
+      const discount = 0;
 
       const cgstRate = Number(product.cgstRate || 0);
       const sgstRate = Number(product.sgstRate || 0);
@@ -374,8 +380,8 @@ const createSale = async (req, res) => {
         serialNumber,
         purchasePrice: itemPurchasePrice,
         sellingPrice,
-        mrp,
-        discount,
+        mrp: 0,
+        discount: 0,
         taxableAmount,
         cgstAmount,
         sgstAmount,
@@ -921,7 +927,6 @@ const getCompanySummary = async (req, res, type) => {
                   pId: "$items.productId",
                   bId: "$branchId",
                   cId: "$companyId",
-                  mrpVal: "$items.mrp",
                 },
                 pipeline: [
                   {
@@ -930,12 +935,7 @@ const getCompanySummary = async (req, res, type) => {
                         $and: [
                           { $eq: ["$companyId", "$$cId"] },
                           { $eq: ["$productId", "$$pId"] },
-                          {
-                            $or: [
-                              { $eq: ["$branchId", "$$bId"] },
-                              { $eq: ["$mrp", "$$mrpVal"] },
-                            ],
-                          },
+                          { $eq: ["$branchId", "$$bId"] },
                         ],
                       },
                     },

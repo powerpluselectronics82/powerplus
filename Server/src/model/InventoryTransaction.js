@@ -28,25 +28,8 @@ const inventoryTransactionSchema = new mongoose.Schema(
       required: true,
     },
 
-    mrp: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
     purchasePrice: {
       type: Number,
-      default: 0,
-      min: 0,
-    },
-    discountType: {
-      type: String,
-      enum: ["percentage", "fixed"],
-      default: "fixed",
-    },
-    discountValue: {  
-      type: Number,
-      required: true,
       default: 0,
       min: 0,
     },

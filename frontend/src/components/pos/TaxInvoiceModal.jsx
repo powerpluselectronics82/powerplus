@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { X, Printer, Download, CheckCircle, Building2, DollarSign, History } from 'lucide-react';
 import { numberToWordsInINR } from '../../utils/numberToWords';
-import companyLogo from '../../assets/logo.jpeg';
+import { PowerPlusLogo } from '../common/PowerPlusLogo';
 import { useBranch } from '../../context/BranchContext';
 import { useAppSelector } from '../../redux/hooks';
 import { ReceivePaymentModal } from './ReceivePaymentModal';
@@ -246,13 +246,12 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
               Official Tax Invoice - {invoiceNumber}
             </h3>
             <span
-              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ml-2 border ${
-                paymentStatus === 'PAID'
-                  ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
-                  : paymentStatus === 'PARTIAL'
+              className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded ml-2 border ${paymentStatus === 'PAID'
+                ? 'bg-emerald-950 text-emerald-300 border-emerald-700'
+                : paymentStatus === 'PARTIAL'
                   ? 'bg-amber-950 text-amber-300 border-amber-700'
                   : 'bg-rose-950 text-rose-300 border-rose-700'
-              }`}
+                }`}
             >
               {paymentStatus}
             </span>
@@ -299,15 +298,9 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
             {/* Top Company Header & Tax Invoice Title */}
             <div className="border border-slate-800 grid grid-cols-12">
               {/* Top Left: Logo & Company Address */}
-              <div className="col-span-7 p-4 border-r border-slate-800 flex gap-4">
+              <div className="col-span-7 p-4 border-r border-slate-800 flex gap-4 items-center">
                 {/* Logo Box */}
-                <div className="w-24 h-24 bg-black rounded-lg flex items-center justify-center p-1 shrink-0 border border-slate-700 shadow-sm overflow-hidden">
-                  <img
-                    src={company?.logoUrl || companyLogo}
-                    alt="POWER PLUS ELECTRONICS Logo"
-                    className="w-full h-full object-contain rounded-lg"
-                  />
-                </div>
+                <PowerPlusLogo variant="invoice" customLogoUrl={company?.logoUrl} />
 
                 {/* Address Info */}
                 <div className="space-y-0.5 text-[11px]">
@@ -549,13 +542,12 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                     </div>
                   )}
 
-                  <div className={`flex justify-between text-xs font-bold p-1.5 rounded border mt-1 ${
-                    paymentStatus === 'PAID'
-                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                      : paymentStatus === 'PARTIAL'
+                  <div className={`flex justify-between text-xs font-bold p-1.5 rounded border mt-1 ${paymentStatus === 'PAID'
+                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                    : paymentStatus === 'PARTIAL'
                       ? 'text-amber-800 bg-amber-50 border-amber-200'
                       : 'text-rose-700 bg-rose-50 border-rose-200'
-                  }`}>
+                    }`}>
                     <span>Payment Status</span>
                     <span className="font-mono uppercase">{paymentStatus}</span>
                   </div>

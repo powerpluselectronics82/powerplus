@@ -71,9 +71,7 @@ const getProductBySerialNumber = async (req, res) => {
 				serialNumber: inventoryUnit.serialNumber,
 				inventoryStatus: inventoryUnit.status,
 				branchId: inventoryUnit.branchId,
-				mrp: inventoryUnit.mrp !== undefined && inventoryUnit.mrp !== null ? inventoryUnit.mrp : inventoryUnit.productId?.mrp,
-				discountType: inventoryUnit.discountType || inventoryUnit.productId?.discountType,
-				discountValue: inventoryUnit.discountValue !== undefined && inventoryUnit.discountValue !== null ? inventoryUnit.discountValue : inventoryUnit.productId?.discountValue,
+				purchasePrice: inventoryUnit.purchasePrice !== undefined && inventoryUnit.purchasePrice !== null ? inventoryUnit.purchasePrice : inventoryUnit.productId?.purchasePrice,
 				sellingPrice: inventoryUnit.sellingPrice !== undefined && inventoryUnit.sellingPrice !== null ? inventoryUnit.sellingPrice : inventoryUnit.productId?.sellingPrice,
 			},
 		});
@@ -98,7 +96,7 @@ const getCompanyStockValuation = async (req, res) => {
 		const inventory = await BranchInventory.find({ companyId })
 			.populate("productId", "name barcode")
 			.populate("branchId", "name code")
-			.sort({ branchId: 1, barcode: 1, mrp: 1 })
+			.sort({ branchId: 1, barcode: 1, purchasePrice: 1 })
 			.lean();
 
 		const products = inventory.map((item) => {
@@ -110,7 +108,6 @@ const getCompanyStockValuation = async (req, res) => {
 				productId: item.productId?._id,
 				name: item.productId?.name,
 				barcode: item.barcode,
-				mrp: item.mrp,
 				purchasePrice,
 				stock,
 				totalValue: purchasePrice * stock,
@@ -159,7 +156,7 @@ const getBranchStockValuation = async (req, res) => {
 
 		const inventory = await BranchInventory.find({ companyId, branchId })
 			.populate("productId", "name barcode")
-			.sort({ barcode: 1, mrp: 1 })
+			.sort({ barcode: 1, purchasePrice: 1 })
 			.lean();
 
 		const products = inventory.map((item) => {
@@ -169,7 +166,6 @@ const getBranchStockValuation = async (req, res) => {
 				productId: item.productId?._id,
 				name: item.productId?.name,
 				barcode: item.barcode,
-				mrp: item.mrp,
 				purchasePrice,
 				stock,
 				totalValue: purchasePrice * stock,
@@ -285,7 +281,7 @@ const getBranchInventoryProducts = async (req, res) => {
 
 		const inventory = await BranchInventory.find({ branchId })
 			.populate("productId")
-			.sort({ productId: 1, mrp: 1 })
+			.sort({ productId: 1, purchasePrice: 1 })
 			.lean();
 
 		const validInventory = inventory.filter((item) => item.productId && item.productId._id);
@@ -301,10 +297,7 @@ const getBranchInventoryProducts = async (req, res) => {
 			...item.productId,
 			branchInventoryId: item._id,
 			branchId: item.branchId,
-			mrp: item.mrp,
 			purchasePrice: item.purchasePrice,
-			discountType: item.discountType,
-			discountValue: item.discountValue,
 			stock: item.stock,
 			manufacturingDate: item.manufacturingDate,
 			expiryDate: item.expiryDate,
@@ -333,9 +326,6 @@ const addBranchInventory = async (req, res) => {
 			branchId: requestedBranchId,
 			barcode,
 			quantity,
-			mrp,
-			discountType,
-			discountValue = 0,
 			manufacturingDate,
 			expiryDate,
 			purchasePrice = 0,
@@ -371,20 +361,14 @@ const addBranchInventory = async (req, res) => {
 			return res.status(404).json({ success: false, message: "Product not found" });
 		}
 
-		const inventoryMrp = Number(mrp);
-		if (!Number.isFinite(inventoryMrp) || inventoryMrp < 0) {
-			return res.status(400).json({ success: false, message: "mrp must be a valid non-negative number" });
+		const inventoryPurchasePrice = Number(purchasePrice || 0);
+		if (isNaN(inventoryPurchasePrice) || inventoryPurchasePrice < 0) {
+			return res.status(400).json({ success: false, message: "purchasePrice must be a valid non-negative number" });
 		}
-
-		const discountVal = Number(discountValue || 0);
-		const discountAmount = discountType === "percentage"
-			? (inventoryMrp * discountVal) / 100
-			: discountVal;
-		const sellingPrice = Math.max(0, inventoryMrp - discountAmount);
 
 		const productId = product._id;
 		const isSerialized = product.isSerialized === true;
-		const requestedQuantity = Number(quantity ?? stock ?? (isSerialized ? serials.length : 0));
+		const requestedQuantity = Number(quantity ?? (isSerialized ? serials.length : 0));
 
 		if (!Number.isInteger(requestedQuantity) || requestedQuantity <= 0) {
 			return res.status(400).json({ success: false, message: "quantity must be a positive integer" });
@@ -405,12 +389,17 @@ const addBranchInventory = async (req, res) => {
 			}
 		}
 
-		let inventory = await BranchInventory.findOne({ companyId, branchId, productId, mrp: inventoryMrp });
+		// If barcode/productId is same but purchasePrice is different, a new branch inventory is created.
+		// If both productId and purchasePrice match, increment existing inventory stock.
+		let inventory = await BranchInventory.findOne({
+			companyId,
+			branchId,
+			productId,
+			purchasePrice: inventoryPurchasePrice,
+		});
+
 		if (inventory) {
 			inventory.stock += requestedQuantity;
-			inventory.purchasePrice = purchasePrice;
-			inventory.discountType = discountType;
-			inventory.discountValue = discountValue;
 			if (manufacturingDate !== undefined) inventory.manufacturingDate = manufacturingDate;
 			if (expiryDate !== undefined) inventory.expiryDate = expiryDate;
 			await inventory.save();
@@ -419,10 +408,7 @@ const addBranchInventory = async (req, res) => {
 				companyId,
 				branchId,
 				productId,
-				mrp: inventoryMrp,
-				purchasePrice,
-				discountType,
-				discountValue,
+				purchasePrice: inventoryPurchasePrice,
 				manufacturingDate,
 				expiryDate,
 				barcode: product.barcode,
@@ -435,12 +421,9 @@ const addBranchInventory = async (req, res) => {
 			branchId,
 			productId,
 			quantity: requestedQuantity,
-			mrp: inventoryMrp,
-			purchasePrice,
-			discountType,
-			discountValue,
+			purchasePrice: inventoryPurchasePrice,
 			barcode: product.barcode,
-			sellingPrice,
+			sellingPrice: 0,
 			serialNumbers: isSerialized ? serials : [],
 		});
 
@@ -452,11 +435,7 @@ const addBranchInventory = async (req, res) => {
 				productId,
 				serialNumber,
 				barcode: product.barcode,
-				mrp: inventoryMrp,
-				purchasePrice,
-				discountType: discountType || "fixed",
-				discountValue: discountVal,
-				sellingPrice,
+				purchasePrice: inventoryPurchasePrice,
 				status: "available",
 			})));
 		}
@@ -563,14 +542,6 @@ const getMonthlyInventoryReport = async (req, res) => {
 
 			const prod = tx.productId;
 			const branchObj = tx.branchId || {};
-			const mrp = Number(tx.mrp !== undefined && tx.mrp !== null ? tx.mrp : prod.mrp || 0);
-			const discountVal = Number(tx.discountValue || 0);
-			const discountAmount = tx.discountType === "percentage" ? (mrp * discountVal) / 100 : discountVal;
-			const sellingPrice = Number(
-				tx.sellingPrice !== undefined && tx.sellingPrice !== null
-					? tx.sellingPrice
-					: Math.max(0, mrp - discountAmount)
-			);
 			const purchasePrice = Number(tx.purchasePrice || 0);
 			const quantity = Number(tx.quantity || 0);
 			const isSerialized = Boolean(prod.isSerialized);
@@ -630,14 +601,9 @@ const getMonthlyInventoryReport = async (req, res) => {
 				modelNumber: prod.modelNumber || "",
 				hsnCode: prod.hsnCode || "",
 				isSerialized,
-				mrp,
-				discountType: tx.discountType || "fixed",
-				discountValue: discountVal,
 				purchasePrice,
-				sellingPrice,
 				stockAdded,
 				totalPurchaseValue: purchasePrice * stockAdded,
-				totalSellingValue: sellingPrice * stockAdded,
 				serialNumbers,
 			});
 		}
@@ -648,7 +614,7 @@ const getMonthlyInventoryReport = async (req, res) => {
 		const totalBatches = items.length;
 		const totalUnitsAdded = items.reduce((sum, i) => sum + i.stockAdded, 0);
 		const totalIntakeCost = items.reduce((sum, i) => sum + i.totalPurchaseValue, 0);
-		const totalSellingValue = items.reduce((sum, i) => sum + i.totalSellingValue, 0);
+		const totalSellingValue = 0;
 
 		return res.status(200).json({
 			success: true,

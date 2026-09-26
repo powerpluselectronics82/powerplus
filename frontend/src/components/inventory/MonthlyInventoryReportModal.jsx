@@ -170,9 +170,6 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                 <th class="num">Units Added</th>
                 <th class="num">Buy Cost / Unit</th>
                 <th class="num">Total Buy Cost</th>
-                <th class="num">MRP</th>
-                <th class="num">Selling Price</th>
-                <th class="num">Total Selling Value</th>
               </tr>
             </thead>
             <tbody>
@@ -214,9 +211,6 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                   <td class="num" style="font-weight: 800; color: #047857;">+${item.stockAdded}</td>
                   <td class="num">₹${Number(item.purchasePrice || 0).toFixed(2)}</td>
                   <td class="num" style="font-weight: 800;">₹${Number(item.totalPurchaseValue || 0).toFixed(2)}</td>
-                  <td class="num">₹${Number(item.mrp || 0).toFixed(2)}</td>
-                  <td class="num" style="color: #4338ca;">₹${Number(item.sellingPrice || 0).toFixed(2)}</td>
-                  <td class="num" style="font-weight: 800; color: #4338ca;">₹${Number(item.totalSellingValue || 0).toFixed(2)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -226,9 +220,6 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                 <td class="num" style="color: #047857;">${printableItems.reduce((acc, i) => acc + i.stockAdded, 0)}</td>
                 <td></td>
                 <td class="num">₹${printableItems.reduce((acc, i) => acc + i.totalPurchaseValue, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                <td></td>
-                <td></td>
-                <td class="num" style="color: #3730a3;">₹${printableItems.reduce((acc, i) => acc + i.totalSellingValue, 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
               </tr>
             </tfoot>
           </table>

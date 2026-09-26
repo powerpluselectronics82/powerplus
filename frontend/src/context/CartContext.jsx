@@ -52,8 +52,9 @@ export const CartProvider = ({ children }) => {
         }
         return [...prevItems, { product, unit: 1, serialNumber }];
       } else {
-        // Non-serialized products increase quantity per price tier (MRP)
-        const productMrp = Number(product.mrp || 0);
+        // Non-serialized products increase quantity per purchase cost tier / inventory batch
+        const productCost = Number(product.purchasePrice || 0);
+        const branchInvId = product.branchInventoryId || product._id;
         const maxStock = Number(
           product.stock ??
           product.availableStock ??
@@ -74,7 +75,9 @@ export const CartProvider = ({ children }) => {
           (item) =>
             item.product._id === product._id &&
             !item.serialNumber &&
-            Number(item.product.mrp || 0) === productMrp
+            (item.product.branchInventoryId
+              ? item.product.branchInventoryId === branchInvId
+              : Number(item.product.purchasePrice || 0) === productCost)
         );
 
         const currentQty = existingIndex > -1 ? Number(prevItems[existingIndex].unit || 0) : 0;
@@ -107,7 +110,7 @@ export const CartProvider = ({ children }) => {
   };
 
   // Update quantity for non-serialized items with stock validation
-  const updateQuantity = (productId, newQty, mrp = null) => {
+  const updateQuantity = (productId, newQty, branchInventoryId = null) => {
     let result = { success: true, message: '' };
 
     setItems((prevItems) => {
@@ -115,7 +118,10 @@ export const CartProvider = ({ children }) => {
         (item) =>
           item.product._id === productId &&
           !item.serialNumber &&
-          (mrp === null || Number(item.product.mrp || 0) === Number(mrp))
+          (branchInventoryId === null ||
+            item.product.branchInventoryId === branchInventoryId ||
+            item.product._id === branchInventoryId ||
+            Number(item.product.purchasePrice || 0) === Number(branchInventoryId))
       );
 
       if (targetIndex === -1) return prevItems;
@@ -157,14 +163,17 @@ export const CartProvider = ({ children }) => {
   };
 
   // Remove specific item
-  const removeItem = (productId, serialNumber = '', mrp = null) => {
+  const removeItem = (productId, serialNumber = '', branchInventoryId = null) => {
     setItems((prevItems) =>
       prevItems.filter(
         (item) =>
           !(
             item.product._id === productId &&
             (item.serialNumber || '') === (serialNumber || '') &&
-            (mrp === null || Number(item.product.mrp || 0) === Number(mrp))
+            (branchInventoryId === null ||
+              item.product.branchInventoryId === branchInventoryId ||
+              item.product._id === branchInventoryId ||
+              Number(item.product.purchasePrice || 0) === Number(branchInventoryId))
           )
       )
     );
@@ -179,28 +188,39 @@ export const CartProvider = ({ children }) => {
     setPaymentMethod('CASH');
   };
 
-  // Helper to compute effective selling price (MRP - discountValue)
-  const getItemPrice = (product) => {
-    if (!product) return 0;
-    const mrp = Number(product.mrp || 0);
-    const discountVal = Number(product.discountValue || 0);
-    const discountAmount = product.discountType === 'percentage'
-      ? (mrp * discountVal) / 100
-      : discountVal;
-    if (discountAmount > 0) {
-      return Math.max(0, mrp - discountAmount);
-    }
-    return Number(product.sellingPrice ?? mrp);
+  // Update manual selling price for cart line item
+  const updateItemPrice = (productId, newPrice, serialNumber = '', branchInventoryId = null) => {
+    setItems((prevItems) =>
+      prevItems.map((item) => {
+        const matches =
+          item.product._id === productId &&
+          (item.serialNumber || '') === (serialNumber || '') &&
+          (branchInventoryId === null ||
+            item.product.branchInventoryId === branchInventoryId ||
+            item.product._id === branchInventoryId ||
+            Number(item.product.purchasePrice || 0) === Number(branchInventoryId));
+
+        if (!matches) return item;
+
+        const parsedPrice = newPrice === '' ? '' : Math.max(0, Number(newPrice) || 0);
+        return {
+          ...item,
+          manualPrice: parsedPrice,
+        };
+      })
+    );
   };
 
-  const getItemDiscount = (product) => {
+  // Helper to compute effective selling price (respects manualPrice override, then product.sellingPrice)
+  const getItemPrice = (product, item = null) => {
+    if (item && item.manualPrice !== undefined && item.manualPrice !== null && item.manualPrice !== '') {
+      return Math.max(0, Number(item.manualPrice));
+    }
     if (!product) return 0;
-    const mrp = Number(product.mrp || 0);
-    const discountVal = Number(product.discountValue || 0);
-    return product.discountType === 'percentage'
-      ? (mrp * discountVal) / 100
-      : discountVal;
+    return Number(product.sellingPrice ?? product.unitPrice ?? 0);
   };
+
+  const getItemDiscount = () => 0;
 
   // Computed Totals
   const totals = useMemo(() => {
@@ -209,8 +229,8 @@ export const CartProvider = ({ children }) => {
     let taxableValue = 0;
 
     items.forEach((item) => {
-      const price = getItemPrice(item.product);
-      const discountAmount = getItemDiscount(item.product);
+      const price = getItemPrice(item.product, item);
+      const discountAmount = getItemDiscount(item.product, item);
       const qty = Number(item.unit || 1);
       const gstRate = Number(item.product?.cgstRate || 0) + Number(item.product?.sgstRate || 0) || Number(item.product?.gstRate || 18);
 
@@ -239,6 +259,9 @@ export const CartProvider = ({ children }) => {
         items,
         addItemByProduct,
         updateQuantity,
+        updateItemPrice,
+        getItemPrice,
+        getItemDiscount,
         removeItem,
         clearCart,
         customerName,

@@ -4,6 +4,7 @@ import { useBranch } from '../context/BranchContext';
 import { productService } from '../services/productService';
 import { AddProductModal } from '../components/inventory/AddProductModal';
 import { AddStockModal } from '../components/inventory/AddStockModal';
+import { UnifiedStockIntakeModal } from '../components/inventory/UnifiedStockIntakeModal';
 import { CategoryBrandModal } from '../components/inventory/CategoryBrandModal';
 import { MonthlyInventoryReportModal } from '../components/inventory/MonthlyInventoryReportModal';
 import {
@@ -57,6 +58,7 @@ export const ProductsPage = () => {
   const [tab, setTab] = useState('ALL'); // ALL | MONTHLY_REPORT | LOW_STOCK | ARCHIVED
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddStockModalOpen, setIsAddStockModalOpen] = useState(false);
+  const [isUnifiedIntakeOpen, setIsUnifiedIntakeOpen] = useState(false);
   const [isCatBrandModalOpen, setIsCatBrandModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [selectedProductDetails, setSelectedProductDetails] = useState(null);
@@ -283,9 +285,6 @@ export const ProductsPage = () => {
                 <th class="num">Units Added</th>
                 <th class="num">Buy Cost / Unit</th>
                 <th class="num">Total Buy Cost</th>
-                <th class="num">MRP</th>
-                <th class="num">Selling Price</th>
-                <th class="num">Total Selling Value</th>
               </tr>
             </thead>
             <tbody>
@@ -327,9 +326,6 @@ export const ProductsPage = () => {
                   <td class="num" style="font-weight: 800; color: #047857;">+${item.stockAdded}</td>
                   <td class="num">₹${Number(item.purchasePrice || 0).toFixed(2)}</td>
                   <td class="num" style="font-weight: 800;">₹${Number(item.totalPurchaseValue || 0).toFixed(2)}</td>
-                  <td class="num">₹${Number(item.mrp || 0).toFixed(2)}</td>
-                  <td class="num" style="color: #4338ca;">₹${Number(item.sellingPrice || 0).toFixed(2)}</td>
-                  <td class="num" style="font-weight: 800; color: #4338ca;">₹${Number(item.totalSellingValue || 0).toFixed(2)}</td>
                 </tr>
               `).join('')}
             </tbody>
@@ -421,22 +417,13 @@ export const ProductsPage = () => {
           )}
 
           {(role === 'OWNER' || role === 'BRANCH_MANAGER' || role === 'INVENTORY_STAFF') && (
-            <>
-              <button
-                onClick={() => setIsAddStockModalOpen(true)}
-                className="btn-secondary py-2.5 px-3.5 text-xs font-bold border-indigo-200 text-indigo-600 hover:bg-indigo-50"
-              >
-                <Boxes className="w-4 h-4" />
-                Receive Stock Intake
-              </button>
-              <button
-                onClick={() => setIsAddModalOpen(true)}
-                className="btn-primary py-2.5 px-4 text-xs font-bold"
-              >
-                <Plus className="w-4 h-4" />
-                New Global Product
-              </button>
-            </>
+            <button
+              onClick={() => setIsUnifiedIntakeOpen(true)}
+              className="btn-primary py-2.5 px-4 text-xs font-black shadow-md shadow-indigo-500/20 flex items-center gap-2"
+            >
+              <Boxes className="w-4 h-4" />
+              Product & Stock Intake
+            </button>
           )}
         </div>
       </div>
@@ -751,8 +738,7 @@ export const ProductsPage = () => {
                   <tr>
                     <th>Product Details</th>
                     <th>Barcode Tag</th>
-                    <th>Buy Price</th>
-                    <th>Selling / MRP</th>
+                    <th>Purchase Cost</th>
                     <th>Available Stock</th>
                     <th>Type</th>
                     <th>Status</th>
@@ -763,15 +749,6 @@ export const ProductsPage = () => {
                   {filteredProducts.map((p, index) => {
                     const stock = p.availableStock ?? p.stock ?? p.Stock ?? 0;
                     const buyPrice = p.purchasePrice ?? 0;
-                    const mrp = Number(p.mrp || 0);
-                    const discountVal = Number(p.discountValue || 0);
-                    const discountAmount = p.discountType === 'percentage'
-                      ? (mrp * discountVal) / 100
-                      : discountVal;
-                    const calculatedSellingPrice = discountAmount > 0
-                      ? Math.max(0, mrp - discountAmount)
-                      : Number(p.sellingPrice ?? mrp);
-
                     const isLow = stock <= (p.minStockLevel || 5);
 
                     return (
@@ -789,16 +766,6 @@ export const ProductsPage = () => {
                         </td>
                         <td className="font-mono text-slate-700 font-bold">
                           ₹{Number(buyPrice).toFixed(2)}
-                        </td>
-                        <td className="font-mono font-bold text-indigo-600">
-                          <div className="flex flex-col">
-                            <span>₹{calculatedSellingPrice.toFixed(2)}</span>
-                            {mrp > calculatedSellingPrice && (
-                              <span className="text-[10px] text-slate-400 line-through font-normal">
-                                MRP ₹{mrp}
-                              </span>
-                            )}
-                          </div>
                         </td>
                         <td>
                           <span
@@ -919,32 +886,21 @@ export const ProductsPage = () => {
                 <h4 className="font-extrabold text-xs text-indigo-900 uppercase tracking-wider">
                   Pricing & Stock Inventory Breakdown
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs font-mono">
                   <div>
                     <span className="text-slate-500 text-[11px] block">Purchase Price (Cost):</span>
                     <span className="font-bold text-slate-900">₹{Number(selectedProductDetails.purchasePrice || 0).toFixed(2)}</span>
                   </div>
                   <div>
-                    <span className="text-slate-500 text-[11px] block">MRP:</span>
-                    <span className="font-bold text-slate-900">₹{Number(selectedProductDetails.mrp || 0).toFixed(2)}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 text-[11px] block">Discount:</span>
+                    <span className="text-slate-500 text-[11px] block">Available Stock:</span>
                     <span className="font-bold text-emerald-600">
-                      {selectedProductDetails.discountValue > 0
-                        ? `${selectedProductDetails.discountType === 'percentage' ? `${selectedProductDetails.discountValue}%` : `₹${selectedProductDetails.discountValue}`}`
-                        : 'None'}
+                      {selectedProductDetails.availableStock ?? selectedProductDetails.stock ?? selectedProductDetails.Stock ?? 0} units
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-500 text-[11px] block">Effective Selling Price:</span>
+                    <span className="text-slate-500 text-[11px] block">Default Selling Price:</span>
                     <span className="font-extrabold text-indigo-600">
-                      ₹{(() => {
-                        const mrp = Number(selectedProductDetails.mrp || 0);
-                        const dv = Number(selectedProductDetails.discountValue || 0);
-                        const da = selectedProductDetails.discountType === 'percentage' ? (mrp * dv) / 100 : dv;
-                        return Math.max(0, mrp - da).toFixed(2);
-                      })()}
+                      ₹{Number(selectedProductDetails.sellingPrice || 0).toFixed(2)}
                     </span>
                   </div>
                 </div>
@@ -962,6 +918,13 @@ export const ProductsPage = () => {
           </div>
         </div>
       )}
+
+      {/* Unified Global Product & Stock Intake Modal */}
+      <UnifiedStockIntakeModal
+        isOpen={isUnifiedIntakeOpen}
+        onClose={() => setIsUnifiedIntakeOpen(false)}
+        onRefresh={loadData}
+      />
 
       {/* Add Global Catalog Product Modal */}
       <AddProductModal

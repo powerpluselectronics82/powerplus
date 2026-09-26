@@ -108,7 +108,7 @@ const SaleSchema = new mongoose.Schema(
 
         mrp: {
           type: Number,
-          required: true,
+          default: 0,
         },
 
         discount: {

@@ -23,24 +23,7 @@ const BranchInventorySchema = new mongoose.Schema(
       index: true,
     },
 
-    mrp: {
-      type: Number,
-      required: true,
-      default: 0,
-      min: 0,
-    },
     purchasePrice: {
-      type: Number,
-      default: 0,
-    },
-
-
-    discountType: {
-      type: String,
-      enum: ["percentage", "fixed"],
-      default: "fixed",
-    },
-    discountValue: {  
       type: Number,
       required: true,
       default: 0,
@@ -76,9 +59,9 @@ const BranchInventorySchema = new mongoose.Schema(
   }
 );
 
-// One inventory record per product, branch, and MRP
+// One inventory record per product, branch, and purchasePrice
 BranchInventorySchema.index(
-  { companyId: 1, branchId: 1, productId: 1, mrp: 1 },
+  { companyId: 1, branchId: 1, productId: 1, purchasePrice: 1 },
   { unique: true }
 );
 
