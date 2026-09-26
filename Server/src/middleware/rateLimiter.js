@@ -1,4 +1,4 @@
-const { rateLimit } = require("express-rate-limit");
+const { rateLimit, ipKeyGenerator } = require("express-rate-limit");
 
 // ==========================================
 // 1. LOGIN / AUTH RATE LIMITER
@@ -31,10 +31,12 @@ const apiLimiter = rateLimit({
 
     limit: 500, // 500 requests per user
 
+    validate: { keyGeneratorIpFallback: false },
+
     keyGenerator: (req) => {
         // authMiddleware should add req.user
         if (!req.user || !req.user._id) {
-            return req.ip;
+            return typeof ipKeyGenerator === "function" ? ipKeyGenerator(req) : (req.ip || "unknown");
         }
 
         return `user:${req.user._id.toString()}`;

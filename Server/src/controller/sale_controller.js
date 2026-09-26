@@ -214,7 +214,7 @@ const createSale = async (req, res) => {
         throw new Error(`Invalid quantity for ${product.name}`);
       }
 
-      const itemPurchasePrice = item.purchasePrice !== undefined && item.purchasePrice !== null && !isNaN(Number(item.purchasePrice))
+      const requestedPurchasePrice = item.purchasePrice !== undefined && item.purchasePrice !== null && !isNaN(Number(item.purchasePrice))
         ? Number(item.purchasePrice)
         : null;
 
@@ -222,7 +222,7 @@ const createSale = async (req, res) => {
         companyId,
         branchId,
         productId: product._id,
-        ...(itemPurchasePrice !== null ? { purchasePrice: itemPurchasePrice } : {}),
+        ...(requestedPurchasePrice !== null ? { purchasePrice: requestedPurchasePrice } : {}),
       });
       if (sessionOpt) invQuery = invQuery.session(sessionOpt);
       let inventory = await invQuery;
@@ -255,7 +255,7 @@ const createSale = async (req, res) => {
           branchId: branchId,
           productId: product._id,
           barcode: product.barcode,
-          purchasePrice: itemPurchasePrice ?? Number(product.purchasePrice || 0),
+          purchasePrice: requestedPurchasePrice ?? Number(product.purchasePrice || 0),
           stock: product.isSerialized ? 1 : Math.max(saleQuantity, Number(product.Stock || 0)),
         });
         await inventory.save(createInvOpts);
@@ -363,6 +363,7 @@ const createSale = async (req, res) => {
       const itemPurchasePrice = Number(
         inventoryUnit?.purchasePrice ||
         inventory?.purchasePrice ||
+        requestedPurchasePrice ||
         0
       );
 
