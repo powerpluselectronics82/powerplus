@@ -10,6 +10,7 @@ const {
   getCompanyStockValuation,
   getProductBySerialNumber,
   getMonthlyInventoryReport,
+  updateBranchInventoryIntake,
 } = require("../controller/branchInventry_controller");
 
 router.get(
@@ -74,6 +75,14 @@ router.post(
   allowed(["OWNER", "BRANCH_MANAGER", "INVENTORY_STAFF"]),
   apiLimiter,
   addBranchInventory,
+);
+
+router.put(
+  "/branchInventory/intake/:id",
+  auth,
+  allowed(["OWNER", "BRANCH_MANAGER", "INVENTORY_STAFF"]),
+  apiLimiter,
+  updateBranchInventoryIntake
 );
 
 module.exports = router;

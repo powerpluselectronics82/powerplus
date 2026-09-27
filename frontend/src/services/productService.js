@@ -57,5 +57,9 @@ export const productService = {
     if (month) params.append('month', month);
     return await api.get(`/branchInventory/report/monthly?${params.toString()}`);
   },
+
+  updateMonthlyIntake: async (intakeId, data) => {
+    return await api.put(`/branchInventory/intake/${intakeId}`, data);
+  },
 };
 

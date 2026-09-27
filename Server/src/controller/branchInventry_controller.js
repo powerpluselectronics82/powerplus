@@ -4,6 +4,7 @@ const Product = require("../model/product");
 const BranchInventory = require("../model/BranchInventory");
 const InventoryUnit = require("../model/inventryUnit");
 const InventoryTransaction = require("../model/InventoryTransaction");
+const Sale = require("../model/sale");
 const redis = require("../config/redis");
 const { createAuditLog } = require("../utils/auditLogger");
 
@@ -11,6 +12,9 @@ const getBranchInventoryCacheKey = (companyId, branchId) => `branchInventory:${c
 const getLowStockCacheKey = (companyId, branchId) => `branchInventory:lowStock:v2:${companyId}:${branchId}`;
 const getBranchValuationCacheKey = (companyId, branchId) => `branchInventory:valuation:${companyId}:${branchId}`;
 const getCompanyValuationCacheKey = (companyId) => `companyInventory:valuation:${companyId}`;
+const getProductsListKey = (companyId) => `products:company:${companyId}`;
+const getProductCacheKey = (companyId, productId) => `product:${companyId}:${productId}`;
+const getProductBarcodeKey = (companyId, barcode) => `product:barcode:${companyId}:${barcode}`;
 
 const invalidateBranchInventoryCache = async (companyId, branchId) => {
 	try {
@@ -654,6 +658,39 @@ const getMonthlyInventoryReport = async (req, res) => {
 				? Math.max(quantity, serialNumbers.length)
 				: quantity;
 
+			const rawSpecs = prod.specifications && typeof prod.specifications === "object" ? prod.specifications : {};
+			const parseVal = (...vals) => {
+				for (const v of vals) {
+					if (v !== undefined && v !== null && String(v).trim().length > 0) {
+						return typeof v === "string" ? v.trim() : v;
+					}
+				}
+				return "";
+			};
+
+			const consolidatedSpecs = {
+				...rawSpecs,
+				ram: parseVal(rawSpecs.ram, prod.ram),
+				storage: parseVal(rawSpecs.storage, prod.storage),
+				color: parseVal(rawSpecs.color, prod.color),
+				processor: parseVal(rawSpecs.processor, prod.processor),
+				operatingSystem: parseVal(rawSpecs.operatingSystem, prod.operatingSystem),
+				warranty: parseVal(rawSpecs.warranty, prod.warranty),
+				tollFreeNumber: parseVal(rawSpecs.tollFreeNumber, prod.tollFreeNumber),
+				dimensions: parseVal(rawSpecs.dimensions, prod.dimensions),
+				weight: parseVal(rawSpecs.weight, prod.weight),
+				powerConsumption: parseVal(rawSpecs.powerConsumption, prod.powerConsumption),
+				voltage: parseVal(rawSpecs.voltage, prod.voltage),
+				connectivity: (rawSpecs.connectivity && rawSpecs.connectivity.length > 0) ? rawSpecs.connectivity : (prod.connectivity || ""),
+				displaySize: parseVal(rawSpecs.displaySize, prod.displaySize),
+				resolution: parseVal(rawSpecs.resolution, prod.resolution),
+				batteryCapacity: parseVal(rawSpecs.batteryCapacity, prod.batteryCapacity),
+				camera: parseVal(rawSpecs.camera, prod.camera),
+				speaker: parseVal(rawSpecs.speaker, prod.speaker),
+				features: (rawSpecs.features && rawSpecs.features.length > 0) ? rawSpecs.features : (prod.features || ""),
+			};
+			const consolidatedDesc = parseVal(prod.description, rawSpecs.description, prod.desc, rawSpecs.desc);
+
 			items.push({
 				inventoryId: tx._id,
 				transactionId: tx._id,
@@ -669,6 +706,8 @@ const getMonthlyInventoryReport = async (req, res) => {
 				brand: prod.brand || "",
 				modelNumber: prod.modelNumber || "",
 				hsnCode: prod.hsnCode || "",
+				description: consolidatedDesc,
+				specifications: consolidatedSpecs,
 				isSerialized,
 				purchasePrice,
 				stockAdded,
@@ -702,6 +741,452 @@ const getMonthlyInventoryReport = async (req, res) => {
 	}
 };
 
+const updateBranchInventoryIntake = async (req, res) => {
+	try {
+		const companyId = req.user?.companyId;
+		const { id } = req.params;
+
+		if (!mongoose.isValidObjectId(id)) {
+			return res.status(400).json({ success: false, message: "Invalid transaction ID format" });
+		}
+
+		// 1. Find the inventory transaction
+		const transaction = await InventoryTransaction.findById(id);
+		if (!transaction) {
+			return res.status(404).json({ success: false, message: "Inventory intake transaction not found" });
+		}
+
+		if (companyId && String(transaction.companyId) !== String(companyId)) {
+			return res.status(403).json({ success: false, message: "Unauthorized: transaction belongs to a different company" });
+		}
+
+		// 2. Find the associated Product
+		const product = await Product.findById(transaction.productId);
+		if (!product) {
+			return res.status(404).json({ success: false, message: "Associated product not found" });
+		}
+
+		const oldBarcode = String(product.barcode || "").trim();
+		const oldPurchasePrice = Number(transaction.purchasePrice || 0);
+		const oldQuantity = Number(transaction.quantity || 0);
+		const isSerialized = Boolean(product.isSerialized);
+
+		// 3. Process Product details
+		const {
+			name,
+			barcode,
+			category,
+			brand,
+			modelNumber,
+			hsnCode,
+			description,
+			specifications,
+			purchasePrice,
+			quantity,
+			serialNumbers,
+		} = req.body;
+
+		// Validate & handle Barcode update
+		let newBarcode = oldBarcode;
+		if (barcode !== undefined) {
+			const cleanBarcode = String(barcode).trim();
+			if (!cleanBarcode) {
+				return res.status(400).json({ success: false, message: "Barcode cannot be empty" });
+			}
+			if (cleanBarcode !== oldBarcode) {
+				const existingBarcodeProduct = await Product.findOne({
+					companyId: transaction.companyId,
+					barcode: cleanBarcode,
+					_id: { $ne: product._id },
+				});
+				if (existingBarcodeProduct) {
+					return res.status(409).json({
+						success: false,
+						message: `Barcode "${cleanBarcode}" is already in use by another product: ${existingBarcodeProduct.name}`,
+					});
+				}
+				newBarcode = cleanBarcode;
+				product.barcode = newBarcode;
+			}
+		}
+
+		// Update product attributes
+		if (name !== undefined && String(name).trim()) {
+			product.name = String(name).trim();
+		}
+		if (category !== undefined) {
+			product.category = String(category).trim();
+		}
+		if (brand !== undefined) {
+			product.brand = String(brand).trim();
+		}
+		if (modelNumber !== undefined) {
+			product.modelNumber = String(modelNumber).trim();
+		}
+		if (hsnCode !== undefined) {
+			product.hsnCode = String(hsnCode).trim();
+		}
+		if (description !== undefined) {
+			product.description = String(description).trim();
+			product.markModified("description");
+		}
+		if (specifications && typeof specifications === "object") {
+			const existingSpecs = (product.specifications && typeof product.specifications.toObject === "function")
+				? product.specifications.toObject()
+				: (product.specifications || {});
+
+			product.specifications = {
+				...existingSpecs,
+				...specifications,
+			};
+			product.markModified("specifications");
+		}
+		await product.save();
+
+		// 4. Validate purchase price
+		let newPurchasePrice = oldPurchasePrice;
+		if (purchasePrice !== undefined) {
+			const parsedPrice = Number(purchasePrice);
+			if (isNaN(parsedPrice) || parsedPrice < 0) {
+				return res.status(400).json({ success: false, message: "Purchase price must be a non-negative number" });
+			}
+			newPurchasePrice = parsedPrice;
+		}
+
+		// 5. Handle Serial Numbers and InventoryUnits if serialized
+		let finalQuantity = oldQuantity;
+		let finalSerialNumbers = [];
+
+		if (isSerialized) {
+			if (!Array.isArray(serialNumbers)) {
+				return res.status(400).json({
+					success: false,
+					message: "serialNumbers must be an array for serialized products",
+				});
+			}
+
+			// Clean and normalize incoming serials
+			// Can be array of strings or array of { serialNumber, originalSerialNumber, status }
+			const normalizedIncoming = [];
+			const seenSerials = new Set();
+
+			for (const s of serialNumbers) {
+				const sn = String(typeof s === "object" ? s.serialNumber || "" : s || "").trim();
+				const orig = String(typeof s === "object" ? (s.originalSerialNumber || s.serialNumber || "") : s || "").trim();
+				if (!sn) continue;
+
+				const lower = sn.toLowerCase();
+				if (seenSerials.has(lower)) {
+					return res.status(400).json({
+						success: false,
+						message: `Duplicate serial number "${sn}" in submitted serial numbers`,
+					});
+				}
+				seenSerials.add(lower);
+				normalizedIncoming.push({
+					serialNumber: sn,
+					originalSerialNumber: orig,
+				});
+			}
+
+			if (normalizedIncoming.length === 0) {
+				return res.status(400).json({
+					success: false,
+					message: "At least one serial number is required for serialized products",
+				});
+			}
+
+			// Current serials recorded on this transaction
+			const currentTxSerials = (transaction.serialNumbers || []).map((s) =>
+				String(typeof s === "object" ? s.serialNumber || "" : s || "").trim()
+			).filter(Boolean);
+
+			// Check live status of current serials
+			const existingUnits = await InventoryUnit.find({
+				companyId: transaction.companyId,
+				serialNumber: { $in: currentTxSerials },
+			});
+
+			const soldSerialsSet = new Set();
+			for (const u of existingUnits) {
+				if (String(u.status).toLowerCase() === "sold") {
+					soldSerialsSet.add(u.serialNumber.trim().toLowerCase());
+				}
+			}
+
+			try {
+				const soldSales = await Sale.find({
+					companyId: transaction.companyId,
+					"items.serialNumber": { $in: currentTxSerials },
+				}).select("items.serialNumber").lean();
+
+				for (const s of soldSales) {
+					for (const it of s.items || []) {
+						if (it?.serialNumber) {
+							soldSerialsSet.add(String(it.serialNumber).trim().toLowerCase());
+						}
+					}
+				}
+			} catch (saleErr) {
+				console.error("Sale status check error in intake edit:", saleErr.message);
+			}
+
+			// Guard: Cannot remove or alter sold serial numbers
+			for (const origSn of currentTxSerials) {
+				if (soldSerialsSet.has(origSn.toLowerCase())) {
+					const stillPresent = normalizedIncoming.some(
+						(inc) =>
+							inc.originalSerialNumber.toLowerCase() === origSn.toLowerCase() ||
+							inc.serialNumber.toLowerCase() === origSn.toLowerCase()
+					);
+					if (!stillPresent) {
+						return res.status(400).json({
+							success: false,
+							message: `Serial number "${origSn}" has already been sold and cannot be deleted or replaced`,
+						});
+					}
+				}
+			}
+
+			// Process each incoming serial:
+			// 1) Renaming / updating existing unit
+			// 2) Adding brand new unit
+			for (const inc of normalizedIncoming) {
+				const isOrigInTx = currentTxSerials.some(
+					(c) => c.toLowerCase() === inc.originalSerialNumber.toLowerCase()
+				);
+
+				if (isOrigInTx && inc.originalSerialNumber.toLowerCase() !== inc.serialNumber.toLowerCase()) {
+					// User changed serial string for an existing unit
+					if (soldSerialsSet.has(inc.originalSerialNumber.toLowerCase())) {
+						return res.status(400).json({
+							success: false,
+							message: `Serial number "${inc.originalSerialNumber}" has been sold and cannot be renamed`,
+						});
+					}
+
+					// Check if new serial already exists
+					const conflict = await InventoryUnit.findOne({
+						companyId: transaction.companyId,
+						serialNumber: inc.serialNumber,
+					});
+					if (conflict) {
+						return res.status(409).json({
+							success: false,
+							message: `Serial number "${inc.serialNumber}" already exists in inventory`,
+						});
+					}
+
+					await InventoryUnit.updateOne(
+						{ companyId: transaction.companyId, serialNumber: inc.originalSerialNumber },
+						{
+							$set: {
+								serialNumber: inc.serialNumber,
+								barcode: newBarcode,
+								purchasePrice: newPurchasePrice,
+							},
+						}
+					);
+				} else if (!isOrigInTx) {
+					// Brand new serial added
+					const conflict = await InventoryUnit.findOne({
+						companyId: transaction.companyId,
+						serialNumber: inc.serialNumber,
+					});
+					if (conflict) {
+						return res.status(409).json({
+							success: false,
+							message: `Serial number "${inc.serialNumber}" already exists in inventory`,
+						});
+					}
+
+					await InventoryUnit.create({
+						companyId: transaction.companyId,
+						branchId: transaction.branchId,
+						productId: product._id,
+						serialNumber: inc.serialNumber,
+						barcode: newBarcode,
+						purchasePrice: newPurchasePrice,
+						status: "available",
+					});
+				} else {
+					// Existing unchanged serial -> update barcode & purchasePrice
+					await InventoryUnit.updateOne(
+						{ companyId: transaction.companyId, serialNumber: inc.serialNumber },
+						{
+							$set: {
+								barcode: newBarcode,
+								purchasePrice: newPurchasePrice,
+							},
+						}
+					);
+				}
+			}
+
+			// Delete removed serials (only if available and not sold)
+			const incomingNewSerialsSet = new Set(normalizedIncoming.map((i) => i.serialNumber.toLowerCase()));
+			const incomingOrigSerialsSet = new Set(normalizedIncoming.map((i) => i.originalSerialNumber.toLowerCase()));
+
+			const removedSerials = currentTxSerials.filter(
+				(orig) => !incomingNewSerialsSet.has(orig.toLowerCase()) && !incomingOrigSerialsSet.has(orig.toLowerCase())
+			);
+
+			if (removedSerials.length > 0) {
+				await InventoryUnit.deleteMany({
+					companyId: transaction.companyId,
+					branchId: transaction.branchId,
+					productId: product._id,
+					serialNumber: { $in: removedSerials },
+					status: { $ne: "sold" },
+				});
+			}
+
+			finalSerialNumbers = normalizedIncoming.map((i) => i.serialNumber);
+			finalQuantity = finalSerialNumbers.length;
+		} else {
+			// Non-serialized product: quantity can be directly updated
+			if (quantity !== undefined) {
+				const parsedQty = parseInt(quantity, 10);
+				if (isNaN(parsedQty) || parsedQty <= 0) {
+					return res.status(400).json({ success: false, message: "quantity must be a positive integer" });
+				}
+				finalQuantity = parsedQty;
+			}
+			finalSerialNumbers = [];
+		}
+
+		// 6. Synchronize BranchInventory stock
+		if (newPurchasePrice === oldPurchasePrice) {
+			const qtyDiff = finalQuantity - oldQuantity;
+			let branchInv = await BranchInventory.findOne({
+				companyId: transaction.companyId,
+				branchId: transaction.branchId,
+				productId: product._id,
+				purchasePrice: oldPurchasePrice,
+			});
+
+			if (branchInv) {
+				branchInv.stock = Math.max(0, branchInv.stock + qtyDiff);
+				branchInv.barcode = newBarcode;
+				await branchInv.save();
+			} else {
+				branchInv = await BranchInventory.create({
+					companyId: transaction.companyId,
+					branchId: transaction.branchId,
+					productId: product._id,
+					purchasePrice: newPurchasePrice,
+					barcode: newBarcode,
+					stock: finalQuantity,
+				});
+			}
+		} else {
+			// Purchase price changed -> decrement old bucket, increment/create new bucket
+			const oldBranchInv = await BranchInventory.findOne({
+				companyId: transaction.companyId,
+				branchId: transaction.branchId,
+				productId: product._id,
+				purchasePrice: oldPurchasePrice,
+			});
+			if (oldBranchInv) {
+				oldBranchInv.stock = Math.max(0, oldBranchInv.stock - oldQuantity);
+				await oldBranchInv.save();
+			}
+
+			let newBranchInv = await BranchInventory.findOne({
+				companyId: transaction.companyId,
+				branchId: transaction.branchId,
+				productId: product._id,
+				purchasePrice: newPurchasePrice,
+			});
+			if (newBranchInv) {
+				newBranchInv.stock += finalQuantity;
+				newBranchInv.barcode = newBarcode;
+				await newBranchInv.save();
+			} else {
+				newBranchInv = await BranchInventory.create({
+					companyId: transaction.companyId,
+					branchId: transaction.branchId,
+					productId: product._id,
+					purchasePrice: newPurchasePrice,
+					barcode: newBarcode,
+					stock: finalQuantity,
+				});
+			}
+		}
+
+		// Also sync barcode across all inventory documents of this product if barcode changed
+		if (newBarcode !== oldBarcode) {
+			await BranchInventory.updateMany(
+				{ companyId: transaction.companyId, productId: product._id },
+				{ $set: { barcode: newBarcode } }
+			);
+			await InventoryUnit.updateMany(
+				{ companyId: transaction.companyId, productId: product._id },
+				{ $set: { barcode: newBarcode } }
+			);
+			await InventoryTransaction.updateMany(
+				{ companyId: transaction.companyId, productId: product._id },
+				{ $set: { barcode: newBarcode } }
+			);
+		}
+
+		// 7. Update InventoryTransaction
+		transaction.quantity = finalQuantity;
+		transaction.purchasePrice = newPurchasePrice;
+		transaction.barcode = newBarcode;
+		transaction.serialNumbers = finalSerialNumbers;
+		await transaction.save();
+
+		// 8. Invalidate Caches
+		await invalidateBranchInventoryCache(transaction.companyId, transaction.branchId);
+
+		try {
+			await redis.del(
+				`products:company:${transaction.companyId}`,
+				`product:${transaction.companyId}:${product._id}`,
+				`product:barcode:${transaction.companyId}:${oldBarcode}`,
+				`product:barcode:${transaction.companyId}:${newBarcode}`
+			);
+		} catch (redisErr) {
+			console.error("Redis product cache invalidation error:", redisErr.message);
+		}
+
+		// 9. Audit Log
+		await createAuditLog(req, {
+			companyId: transaction.companyId,
+			branchId: transaction.branchId,
+			action: "BRANCH_INVENTORY_INTAKE_UPDATE",
+			resource: "InventoryTransaction",
+			resourceId: transaction._id,
+			details: {
+				productId: product._id,
+				productName: product.name,
+				oldQuantity,
+				newQuantity: finalQuantity,
+				oldPurchasePrice,
+				newPurchasePrice,
+				barcode: newBarcode,
+				serialNumbersCount: finalSerialNumbers.length,
+			},
+		});
+
+		return res.status(200).json({
+			success: true,
+			message: "Inventory intake record updated successfully",
+			data: {
+				transaction,
+				product,
+			},
+		});
+	} catch (error) {
+		console.error("Update branch inventory intake error:", error);
+		return res.status(error.statusCode || (error.code === 11000 ? 409 : 500)).json({
+			success: false,
+			message: error.code === 11000 ? "Serial number or barcode already exists" : error.message || "Failed to update inventory intake record",
+		});
+	}
+};
+
 module.exports = {
 	addBranchInventory,
 	getBranchInventoryProducts,
@@ -710,4 +1195,5 @@ module.exports = {
 	getCompanyStockValuation,
 	getProductBySerialNumber,
 	getMonthlyInventoryReport,
+	updateBranchInventoryIntake,
 };

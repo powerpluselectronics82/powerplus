@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { productService } from '../../services/productService';
+import { EditMonthlyIntakeModal } from './EditMonthlyIntakeModal';
 import {
   Calendar,
   Printer,
@@ -13,15 +14,50 @@ import {
   Layers,
   ChevronDown,
   ChevronRight,
+  Edit3,
 } from 'lucide-react';
 
+import { useAppSelector } from '../../redux/hooks';
+
+const extractSpecsList = (specs) => {
+  if (!specs || typeof specs !== 'object') return [];
+  const list = [];
+  if (specs.ram) list.push({ label: 'RAM', val: specs.ram });
+  if (specs.storage) list.push({ label: 'Storage', val: specs.storage });
+  if (specs.color) list.push({ label: 'Color', val: specs.color });
+  if (specs.processor) list.push({ label: 'CPU', val: specs.processor });
+  if (specs.operatingSystem) list.push({ label: 'OS', val: specs.operatingSystem });
+  if (specs.displaySize) list.push({ label: 'Display', val: specs.displaySize });
+  if (specs.resolution) list.push({ label: 'Res', val: specs.resolution });
+  if (specs.batteryCapacity) list.push({ label: 'Battery', val: specs.batteryCapacity });
+  if (specs.camera) list.push({ label: 'Camera', val: specs.camera });
+  if (specs.speaker) list.push({ label: 'Audio', val: specs.speaker });
+  if (specs.warranty) list.push({ label: 'Warranty', val: specs.warranty });
+  if (specs.connectivity) {
+    const conn = Array.isArray(specs.connectivity) ? specs.connectivity.join(', ') : specs.connectivity;
+    if (conn) list.push({ label: 'Conn', val: conn });
+  }
+  if (specs.features) {
+    const feat = Array.isArray(specs.features) ? specs.features.join(', ') : specs.features;
+    if (feat) list.push({ label: 'Feat', val: feat });
+  }
+  return list;
+};
+
 export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId, currentBranch }) => {
+  const { catalogProducts = [], branchProducts = [] } = useAppSelector((state) => state.products || {});
   const currentMonthStr = new Date().toISOString().slice(0, 7);
   const [month, setMonth] = useState(currentMonthStr);
   const [loading, setLoading] = useState(false);
   const [reportData, setReportData] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSerials, setExpandedSerials] = useState({});
+  const [editingIntakeItem, setEditingIntakeItem] = useState(null);
+
+  const handleOpenEditIntake = (item) => {
+    if (!item) return;
+    setEditingIntakeItem(item);
+  };
 
   const fetchReport = async (targetMonth) => {
     setLoading(true);
@@ -179,6 +215,12 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                   <td><strong>${item.branchName || 'Main Branch'}</strong></td>
                   <td>
                     <strong style="color: #0f172a; font-size: 12px;">${item.name}</strong><br/>
+                    ${item.description ? `<div style="font-size: 10px; color: #334155; background: #fef3c7; padding: 2px 6px; border-radius: 4px; margin: 3px 0; font-style: italic;"><strong>Desc:</strong> ${item.description}</div>` : ''}
+                    ${(() => {
+                      const sps = extractSpecsList(item.specifications);
+                      if (sps.length === 0) return '';
+                      return `<div style="margin: 2px 0;">${sps.map(sp => `<span style="display: inline-block; font-size: 9px; font-weight: bold; background: #e0e7ff; color: #3730a3; padding: 1px 5px; border-radius: 3px; margin: 1px 3px 1px 0;">${sp.label}: ${sp.val}</span>`).join('')}</div>`;
+                    })()}
                     <span style="color: #475569; font-size: 10px;">
                       Cat: <strong>${item.category || 'General'}</strong>
                       ${item.brand ? ` | Brand: <strong>${item.brand}</strong>` : ''}
@@ -245,8 +287,9 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-6xl w-full p-6 relative max-h-[92vh] flex flex-col overflow-hidden">
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-6xl w-full p-6 relative max-h-[92vh] flex flex-col overflow-hidden">
         
         {/* Modal Top Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-4">
@@ -389,12 +432,14 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                   <th>Units Added</th>
                   <th>Buy Price (Cost)</th>
                   <th>Total Purchase Cost</th>
+                  <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredItems.map((item) => {
                   const isExpanded = expandedSerials[item.inventoryId];
                   const hasSerials = item.isSerialized && (item.serialNumbers || []).length > 0;
+                  const specsList = extractSpecsList(item.specifications);
 
                   return (
                     <React.Fragment key={item.inventoryId}>
@@ -410,7 +455,7 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                         </td>
                         <td>
                           <div>
-                            <div className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5">
+                            <div className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
                               <span>{item.name}</span>
                               {hasSerials && (
                                 <button
@@ -423,6 +468,30 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                                 </button>
                               )}
                             </div>
+
+                            {/* Description shown FIRST if present */}
+                            {item.description && (
+                              <div className="text-[11px] text-slate-700 bg-amber-50/80 border border-amber-200/90 rounded-lg px-2.5 py-1 my-1.5 font-medium flex items-start gap-1.5 shadow-2xs">
+                                <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                <span className="line-clamp-2">{item.description}</span>
+                              </div>
+                            )}
+
+                            {/* Technical Specifications shown FIRST if present */}
+                            {specsList.length > 0 && (
+                              <div className="flex flex-wrap gap-1 my-1.5">
+                                {specsList.map((sp, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-900 border border-indigo-200/80 font-mono shadow-2xs"
+                                  >
+                                    <span className="text-indigo-500 font-semibold uppercase text-[9px]">{sp.label}:</span>
+                                    <span>{sp.val}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
                             <div className="text-[11px] text-slate-500 font-medium mt-0.5">
                               {item.category || 'General'} {item.brand && `• Brand: ${item.brand}`} {item.modelNumber && `• Model: ${item.modelNumber}`} {item.hsnCode && `• HSN: ${item.hsnCode}`}
                             </div>
@@ -442,12 +511,22 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                         <td className="font-mono text-xs font-extrabold text-slate-900">
                           ₹{Number(item.totalPurchaseValue || 0).toFixed(2)}
                         </td>
+                        <td className="text-right">
+                          <button
+                            onClick={() => handleOpenEditIntake(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
+                            title="Edit product details, inventory stock, serials and transaction"
+                          >
+                            <Edit3 className="w-3 h-3 text-indigo-600" />
+                            <span>Edit</span>
+                          </button>
+                        </td>
                       </tr>
 
                       {/* Serial Numbers Breakdown Sub-Row */}
                       {hasSerials && (isExpanded || searchQuery.trim().length > 0) && (
                         <tr className="bg-indigo-50/40">
-                          <td colSpan="7" className="p-3 pl-10">
+                          <td colSpan="8" className="p-3 pl-10">
                             <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm space-y-2">
                               <div className="flex items-center justify-between text-xs font-bold text-indigo-900 border-b border-indigo-50 pb-1.5">
                                 <span className="uppercase tracking-wider text-[10px] text-indigo-600">
@@ -524,5 +603,16 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
         </div>
       </div>
     </div>
+
+    {/* Edit Monthly Intake Modal */}
+      {editingIntakeItem && (
+        <EditMonthlyIntakeModal
+          isOpen={Boolean(editingIntakeItem)}
+          item={editingIntakeItem}
+          onClose={() => setEditingIntakeItem(null)}
+          onSuccess={() => fetchReport(month)}
+        />
+      )}
+    </>
   );
 };
