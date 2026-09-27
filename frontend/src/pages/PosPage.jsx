@@ -77,9 +77,8 @@ export const PosPage = () => {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Serial Number & Price Tier Modal States
+  // Serial Number Modal States
   const [pendingSerialProduct, setPendingSerialProduct] = useState(null);
-  const [pendingPriceGroup, setPendingPriceGroup] = useState(null);
   const [serialInput, setSerialInput] = useState('');
   const [serialError, setSerialError] = useState('');
 
@@ -139,38 +138,55 @@ export const PosPage = () => {
       setPendingSerialProduct(product);
       setSerialInput('');
       setSerialError('');
-    } else {
-      const totalStock = Number(
-        product.stock ?? product.availableStock ?? product.Stock ?? product.quantity ?? 0
+      return;
+    }
+
+    // Non-serialized item handling:
+    const totalStock = Number(
+      product.stock ?? product.availableStock ?? product.Stock ?? product.quantity ?? 0
+    );
+
+    if (totalStock <= 0) {
+      notify(`"${product.name}" is currently out of stock.`, 'warning', 'Out of Stock');
+      return;
+    }
+
+    const totalInCart = items
+      .filter((i) => i.product._id === product._id && !i.serialNumber)
+      .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+    if (totalInCart >= totalStock) {
+      notify(
+        `Cannot add more. Stock limit (${totalStock}) reached for "${product.name}". You already have ${totalInCart} in your cart.`,
+        'warning',
+        'Stock Limit Exceeded'
       );
+      return;
+    }
 
-      if (totalStock <= 0) {
-        notify(`"${product.name}" is currently out of stock.`, 'warning', 'Out of Stock');
-        return;
-      }
-
-      const inCartCount = items
+    // Find the batch that still has available stock (FIFO) and directly add to cart
+    const batches = Array.isArray(product.batches) && product.batches.length > 0 ? product.batches : [product];
+    let selectedBatch = batches[0];
+    for (const b of batches) {
+      const bStock = Number(b.stock || 0);
+      const bInCart = items
         .filter(
           (i) =>
-            i.product._id === product._id &&
+            i.product._id === b._id &&
             !i.serialNumber &&
-            (product.branchInventoryId && i.product.branchInventoryId
-              ? i.product.branchInventoryId === product.branchInventoryId
-              : Number(i.product.purchasePrice || 0) === Number(product.purchasePrice || 0))
+            (b.branchInventoryId && i.product.branchInventoryId
+              ? i.product.branchInventoryId === b.branchInventoryId
+              : Number(i.product.purchasePrice || 0) === Number(b.purchasePrice || 0))
         )
         .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
-      if (inCartCount >= totalStock) {
-        notify(
-          `Cannot add more. Stock limit (${totalStock}) reached for "${product.name}". You already have ${inCartCount} in your cart.`,
-          'warning',
-          'Stock Limit Exceeded'
-        );
-        return;
+      if (bInCart < bStock) {
+        selectedBatch = b;
+        break;
       }
-
-      addItemByProduct(product, 1);
     }
+
+    addItemByProduct(selectedBatch, 1);
   };
 
   // Confirm Serial Number Handler
@@ -271,20 +287,15 @@ export const PosPage = () => {
         setPendingSerialProduct(serializedMatch);
         setSerialInput('');
         setSerialError('');
-      } else if (localBarcodeMatches.length === 1) {
+      } else {
+        // Non-serialized standard item: DIRECTLY ADD TO CART without showing price selection
         const prod = localBarcodeMatches[0];
-        const totalStock = Number(
-          prod.stock ?? prod.availableStock ?? prod.Stock ?? prod.quantity ?? 0
+        const totalStock = localBarcodeMatches.reduce(
+          (sum, b) => sum + Number(b.stock ?? b.availableStock ?? b.Stock ?? b.quantity ?? 0),
+          0
         );
         const inCartCount = items
-          .filter(
-            (i) =>
-              i.product._id === prod._id &&
-              !i.serialNumber &&
-              (prod.branchInventoryId && i.product.branchInventoryId
-                ? i.product.branchInventoryId === prod.branchInventoryId
-                : Number(i.product.purchasePrice || 0) === Number(prod.purchasePrice || 0))
-          )
+          .filter((i) => i.product._id === prod._id && !i.serialNumber)
           .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
         if (totalStock <= 0) {
@@ -296,11 +307,28 @@ export const PosPage = () => {
             'Stock Limit Exceeded'
           );
         } else {
-          addItemByProduct(prod, 1);
+          // Find first batch with available stock (FIFO)
+          let selectedBatch = prod;
+          for (const b of localBarcodeMatches) {
+            const bStock = Number(b.stock || 0);
+            const bInCart = items
+              .filter(
+                (i) =>
+                  i.product._id === b._id &&
+                  !i.serialNumber &&
+                  (b.branchInventoryId && i.product.branchInventoryId
+                    ? i.product.branchInventoryId === b.branchInventoryId
+                    : Number(i.product.purchasePrice || 0) === Number(b.purchasePrice || 0))
+              )
+              .reduce((sum, i) => sum + Number(i.unit || 0), 0);
+
+            if (bInCart < bStock) {
+              selectedBatch = b;
+              break;
+            }
+          }
+          addItemByProduct(selectedBatch, 1);
         }
-      } else {
-        // Multiple price tiers (different MRPs) exist for this non-serialized product barcode
-        setPendingPriceGroup(localBarcodeMatches);
       }
       setBarcodeInput('');
       return;
@@ -454,7 +482,63 @@ export const PosPage = () => {
     }
   };
 
-  const filteredProducts = products.filter((p) => {
+  // Group branch products so each unique barcode/product appears as ONE single product card in the POS terminal
+  const uniqueProducts = React.useMemo(() => {
+    if (!Array.isArray(products) || products.length === 0) return [];
+
+    const map = new Map();
+    for (const p of products) {
+      if (!p) continue;
+      const key = String(p.barcode ? p.barcode.trim() : (p._id || '')).toLowerCase();
+      if (!key) continue;
+
+      const pStock = Number(p.stock ?? p.availableStock ?? p.Stock ?? p.quantity ?? 0);
+      const pUnits = Array.isArray(p.inventoryUnits) ? p.inventoryUnits : [];
+
+      if (!map.has(key)) {
+        map.set(key, {
+          ...p,
+          stock: pStock,
+          availableStock: pStock,
+          Stock: pStock,
+          quantity: pStock,
+          inventoryUnits: [...pUnits],
+          batches: [{ ...p, stock: pStock }],
+        });
+      } else {
+        const existing = map.get(key);
+        existing.stock += pStock;
+        existing.availableStock = existing.stock;
+        existing.Stock = existing.stock;
+        existing.quantity = existing.stock;
+
+        // If existing had no sellingPrice or 0, but this batch has sellingPrice, update it
+        if ((!existing.sellingPrice || Number(existing.sellingPrice) === 0) && p.sellingPrice) {
+          existing.sellingPrice = p.sellingPrice;
+        }
+
+        // Merge serialized units without duplicates
+        if (pUnits.length > 0) {
+          const seenSerials = new Set(
+            existing.inventoryUnits.map((u) => String(u?.serialNumber || '').toLowerCase())
+          );
+          for (const u of pUnits) {
+            const sn = String(u?.serialNumber || '').toLowerCase();
+            if (sn && !seenSerials.has(sn)) {
+              existing.inventoryUnits.push(u);
+              seenSerials.add(sn);
+            }
+          }
+        }
+
+        existing.batches.push({ ...p, stock: pStock });
+      }
+    }
+
+    return Array.from(map.values());
+  }, [products]);
+
+  const filteredProducts = uniqueProducts.filter((p) => {
     if (!p) return false;
     const q = (search || '').toLowerCase().trim();
     if (!q) return true;
@@ -577,14 +661,7 @@ export const PosPage = () => {
                 const inCartCount = product.isSerialized
                   ? inCartForThisProduct.length
                   : items
-                    .filter(
-                      (i) =>
-                        i.product._id === product._id &&
-                        !i.serialNumber &&
-                        (product.branchInventoryId && i.product.branchInventoryId
-                          ? i.product.branchInventoryId === product.branchInventoryId
-                          : Number(i.product.purchasePrice || 0) === Number(product.purchasePrice || 0))
-                    )
+                    .filter((i) => i.product._id === product._id && !i.serialNumber)
                     .reduce((sum, i) => sum + Number(i.unit || 0), 0);
 
                 const availableToSelect = Math.max(0, totalStock - inCartCount);
@@ -595,7 +672,7 @@ export const PosPage = () => {
 
                 return (
                   <div
-                    key={`${product._id || product.barcode || 'prod'}_${index}`}
+                    key={product.barcode || product._id || `prod_${index}`}
                     onClick={() => handleSelectProduct(product)}
                     className={`p-3.5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${isOutOfStock
                       ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
@@ -642,11 +719,13 @@ export const PosPage = () => {
                       </h4>
                     </div>
 
-                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between">
+                    <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between min-h-[32px]">
                       <div className="flex flex-col">
-                        <div className="font-extrabold text-indigo-600 text-sm font-mono">
-                          ₹{price.toFixed(2)}
-                        </div>
+                        {price > 0 && (
+                          <div className="font-extrabold text-indigo-600 text-sm font-mono">
+                            ₹{price.toFixed(2)}
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1266,109 +1345,6 @@ export const PosPage = () => {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Batch Selection Modal for Non-Serialized Products with Multiple Purchase Cost Batches */}
-      {pendingPriceGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-extrabold text-xs">
-                  ₹
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-slate-900 text-sm">
-                    Select Inventory Batch
-                  </h3>
-                  <p className="text-[11px] text-slate-400 font-semibold">
-                    Multiple purchase cost batches found for {pendingPriceGroup[0]?.name}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setPendingPriceGroup(null)}
-                className="w-7 h-7 rounded-lg hover:bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-xs"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {pendingPriceGroup.map((item, idx) => {
-                const price = getProductPrice(item);
-                const inCartForTier = items
-                  .filter(
-                    (i) =>
-                      i.product._id === item._id &&
-                      !i.serialNumber &&
-                      (item.branchInventoryId && i.product.branchInventoryId
-                        ? i.product.branchInventoryId === item.branchInventoryId
-                        : Number(i.product.purchasePrice || 0) === Number(item.purchasePrice || 0))
-                  )
-                  .reduce((sum, i) => sum + Number(i.unit || 0), 0);
-
-                const tierStock = Number(item.stock ?? 0);
-                const isOutOfStock = tierStock <= 0;
-                const isMaxInCart = !isOutOfStock && inCartForTier >= tierStock;
-
-                return (
-                  <button
-                    key={`${item.branchInventoryId || item._id}_${idx}`}
-                    type="button"
-                    disabled={isOutOfStock}
-                    onClick={() => {
-                      if (isMaxInCart) {
-                        notify(
-                          `Cannot add more. Stock limit (${tierStock}) reached for "${item.name}". Already have ${inCartForTier} in cart.`,
-                          'warning',
-                          'Stock Limit Exceeded'
-                        );
-                        return;
-                      }
-                      addItemByProduct(item, 1);
-                      setPendingPriceGroup(null);
-                    }}
-                    className={`w-full text-left p-3 rounded-2xl border transition-all flex items-center justify-between ${isOutOfStock
-                      ? 'opacity-50 bg-slate-100 border-slate-200 cursor-not-allowed'
-                      : isMaxInCart
-                        ? 'bg-amber-50/70 border-amber-300 hover:border-amber-400'
-                        : 'bg-slate-50 border-slate-200 hover:border-indigo-500 hover:bg-indigo-50/50'
-                      }`}
-                  >
-                    <div>
-                      <div className="font-extrabold text-slate-900 text-xs">
-                        Purchase Cost: <span className="font-mono text-indigo-600">₹{Number(item.purchasePrice || 0).toFixed(2)}</span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 font-mono">
-                        Available Stock: {tierStock} unit(s)
-                      </div>
-                    </div>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${isOutOfStock
-                      ? 'text-rose-600 bg-rose-50 border-rose-200'
-                      : isMaxInCart
-                        ? 'text-amber-800 bg-amber-100 border-amber-200'
-                        : 'text-indigo-600 bg-white border-slate-200'
-                      }`}>
-                      {isOutOfStock
-                        ? 'Out of Stock'
-                        : isMaxInCart
-                          ? `Max in cart (${inCartForTier}/${tierStock})`
-                          : `${tierStock} Available`}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              onClick={() => setPendingPriceGroup(null)}
-              className="btn-secondary w-full justify-center py-2 text-xs"
-            >
-              Cancel
-            </button>
           </div>
         </div>
       )}
