@@ -542,6 +542,63 @@ const getMonthlyInventoryReport = async (req, res) => {
 		const items = [];
 		const usedUnitIds = new Set();
 
+		// Collect all unique serial number strings from transactions and units in this month to query real-time status
+		const allSerialStrings = new Set();
+		for (const tx of validTransactions) {
+			if (Array.isArray(tx.serialNumbers)) {
+				for (const s of tx.serialNumbers) {
+					const clean = String(typeof s === "object" ? s.serialNumber : s || "").trim();
+					if (clean) allSerialStrings.add(clean);
+				}
+			}
+		}
+		for (const u of validUnits) {
+			if (u?.serialNumber) {
+				allSerialStrings.add(String(u.serialNumber).trim());
+			}
+		}
+
+		// Query real-time status from InventoryUnit and Sale
+		const unitStatusMap = new Map();
+		if (allSerialStrings.size > 0) {
+			const serialList = Array.from(allSerialStrings);
+
+			// 1. Check InventoryUnit records for status (available, sold, damaged, etc.)
+			const unitDocs = await InventoryUnit.find({
+				serialNumber: { $in: serialList },
+				...(companyId ? { companyId } : {}),
+			})
+				.select("serialNumber status branchId productId createdAt updatedAt")
+				.lean();
+
+			for (const u of unitDocs) {
+				if (u?.serialNumber) {
+					unitStatusMap.set(String(u.serialNumber).trim().toLowerCase(), u.status || "available");
+				}
+			}
+
+			// 2. Cross-reference completed Sales to ensure any sold serial number is marked as sold
+			try {
+				const Sale = require("../model/sale");
+				const soldSales = await Sale.find({
+					"items.serialNumber": { $in: serialList },
+					...(companyId ? { companyId } : {}),
+				})
+					.select("items.serialNumber")
+					.lean();
+
+				for (const s of soldSales) {
+					for (const it of (s.items || [])) {
+						if (it?.serialNumber) {
+							unitStatusMap.set(String(it.serialNumber).trim().toLowerCase(), "sold");
+						}
+					}
+				}
+			} catch (saleLookupErr) {
+				console.error("Sale serial lookup error in monthly report:", saleLookupErr.message);
+			}
+		}
+
 		// Each inventory transaction is a distinct intake batch!
 		for (const tx of validTransactions) {
 			if (!tx.productId || !tx.productId._id) continue;
@@ -555,11 +612,15 @@ const getMonthlyInventoryReport = async (req, res) => {
 			let serialNumbers = [];
 
 			if (Array.isArray(tx.serialNumbers) && tx.serialNumbers.length > 0) {
-				serialNumbers = tx.serialNumbers.map((s) => ({
-					serialNumber: s,
-					addedAt: tx.createdAt,
-					status: "available",
-				}));
+				serialNumbers = tx.serialNumbers.map((s) => {
+					const sn = String(typeof s === "object" ? s.serialNumber : s || "").trim();
+					const liveStatus = unitStatusMap.get(sn.toLowerCase()) || (typeof s === "object" && s.status ? s.status : "available");
+					return {
+						serialNumber: sn,
+						addedAt: (typeof s === "object" && s.addedAt) || tx.createdAt,
+						status: liveStatus,
+					};
+				});
 			} else if (isSerialized) {
 				const pbKey = `${String(prod._id)}_${String(branchObj._id || "")}`;
 				const candidateUnits = unitsByProductBranch.get(pbKey) || [];
@@ -578,11 +639,13 @@ const getMonthlyInventoryReport = async (req, res) => {
 
 				for (const u of unitsToUse) {
 					usedUnitIds.add(String(u._id));
+					const sn = String(u.serialNumber || "").trim();
+					const liveStatus = unitStatusMap.get(sn.toLowerCase()) || u.status || "available";
 					serialNumbers.push({
 						unitId: u._id,
-						serialNumber: u.serialNumber,
+						serialNumber: sn,
 						addedAt: u.createdAt,
-						status: u.status,
+						status: liveStatus,
 					});
 				}
 			}

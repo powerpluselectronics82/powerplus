@@ -192,9 +192,14 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                           ${item.serialNumbers.map(s => {
                             const sn = typeof s === 'object' ? s.serialNumber : s;
                             const dt = s?.addedAt ? new Date(s.addedAt).toLocaleDateString('en-IN') : '';
+                            const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+                            const isSold = String(status).toLowerCase() === 'sold';
                             return `
-                              <span class="serial-tag">
-                                ${sn}
+                              <span class="serial-tag" style="${isSold ? 'background-color: #fee2e2; border-color: #fca5a5; color: #991b1b;' : 'background-color: #f0fdf4; border-color: #86efac; color: #166534;'}">
+                                <span style="${isSold ? 'text-decoration: line-through;' : ''}">${sn}</span>
+                                <span style="font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 3px; margin-left: 4px; ${isSold ? 'background-color: #ef4444; color: #ffffff;' : 'background-color: #10b981; color: #ffffff;'}">
+                                  ${isSold ? 'SOLD (NOT AVAILABLE)' : 'AVAILABLE'}
+                                </span>
                                 ${dt ? `<span class="serial-date">(${dt})</span>` : ''}
                               </span>
                             `;
@@ -454,16 +459,40 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                                   const sn = typeof s === 'object' ? s.serialNumber : s;
                                   const dt = s?.addedAt ? new Date(s.addedAt) : new Date(item.createdAt);
                                   const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+                                  const isSold = String(status).toLowerCase() === 'sold';
+
                                   return (
-                                    <div key={s?.unitId || idx} className="p-2 bg-slate-50 rounded-lg border border-slate-200/80 flex items-center justify-between text-xs font-mono">
+                                    <div
+                                      key={s?.unitId || idx}
+                                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs font-mono transition-all ${
+                                        isSold
+                                          ? 'bg-rose-50/70 border-rose-200 shadow-2xs'
+                                          : 'bg-slate-50 border-slate-200/80'
+                                      }`}
+                                    >
                                       <div>
-                                        <span className="font-bold text-slate-900 block">{sn}</span>
-                                        <span className="text-[10px] text-slate-400 font-normal">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className={`font-bold ${isSold ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                                            {sn}
+                                          </span>
+                                          {isSold && (
+                                            <span className="text-[10px] font-bold text-rose-700 bg-rose-100/90 px-1.5 py-0.5 rounded">
+                                              Not Available
+                                            </span>
+                                          )}
+                                        </div>
+                                        <span className="text-[10px] text-slate-400 font-normal block mt-0.5">
                                           Added: {dt.toLocaleDateString('en-IN')} {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                                         </span>
                                       </div>
-                                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase ${status === 'available' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-700'}`}>
-                                        {status}
+                                      <span
+                                        className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
+                                          isSold
+                                            ? 'bg-rose-600 text-white shadow-xs'
+                                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                        }`}
+                                      >
+                                        {isSold ? 'SOLD' : 'AVAILABLE'}
                                       </span>
                                     </div>
                                   );
