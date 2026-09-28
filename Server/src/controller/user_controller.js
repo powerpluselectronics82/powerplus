@@ -5,6 +5,8 @@ const Company = require("../model/company");
 const Branch = require("../model/branch");
 const redis = require("../config/redis");
 const { createAuditLog } = require("../utils/auditLogger");
+const generateOtp = require("../config/generateOtp");
+const { sendPasswordResetEmail } = require("../utils/sendEmail");
 
 const {
   sendPhoneOtp,
@@ -629,6 +631,216 @@ const toggleUserStatus = async (req, res) => {
   }
 };
 
+// ==========================================
+// Forgot Password / Email OTP Reset Flow
+// ==========================================
+
+// Request password reset OTP via email
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email address is required",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "No account found with this email address",
+      });
+    }
+
+    if (user.status === "INACTIVE") {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is deactivated. Please contact your company administrator.",
+      });
+    }
+
+    // Generate 6-digit OTP
+    const otp = generateOtp();
+    const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+    user.resetPasswordOtp = otp;
+    user.resetPasswordExpires = expires;
+    await user.save();
+
+    // Cache in redis if active
+    try {
+      await redis.set(`pwd_reset_otp:${normalizedEmail}`, otp, "EX", 600);
+    } catch (redisError) {
+      console.warn("Redis error on saving reset OTP:", redisError.message);
+    }
+
+    // Send email with OTP
+    const emailResult = await sendPasswordResetEmail({
+      to: user.email,
+      name: user.name,
+      otp,
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Password reset OTP sent to your email address",
+      data: {
+        email: user.email,
+        expiresInSeconds: 600,
+        delivered: emailResult?.delivered,
+      },
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to process password reset request",
+    });
+  }
+};
+
+// Verify password reset OTP
+const verifyResetOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail }).select("+resetPasswordOtp +resetPasswordExpires");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.resetPasswordOtp || user.resetPasswordOtp !== String(otp).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP code",
+      });
+    }
+
+    if (!user.resetPasswordExpires || new Date() > user.resetPasswordExpires) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP code has expired. Please request a new one.",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "OTP verified successfully",
+    });
+  } catch (error) {
+    console.error("Verify reset OTP error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to verify OTP",
+    });
+  }
+};
+
+// Reset password with verified OTP
+const resetPassword = async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+
+    if (!email || !otp || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, OTP, and new password are required",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await User.findOne({ email: normalizedEmail }).select("+passwordHash +resetPasswordOtp +resetPasswordExpires");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    if (!user.resetPasswordOtp || user.resetPasswordOtp !== String(otp).trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid OTP code",
+      });
+    }
+
+    if (!user.resetPasswordExpires || new Date() > user.resetPasswordExpires) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP code has expired. Please request a new code.",
+      });
+    }
+
+    // Hash the new password
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    user.passwordHash = passwordHash;
+    user.resetPasswordOtp = null;
+    user.resetPasswordExpires = null;
+    await user.save();
+
+    // Invalidate Redis cache
+    try {
+      await redis.del(`pwd_reset_otp:${normalizedEmail}`);
+      await redis.del(`user:${user._id.toString()}`);
+    } catch (redisError) {
+      console.warn("Redis delete error on password reset:", redisError.message);
+    }
+
+    // Create Audit Log
+    try {
+      await createAuditLog(req, {
+        companyId: user.companyId,
+        branchId: user.branchId,
+        userId: user._id,
+        userName: user.name,
+        action: "USER_PASSWORD_RESET",
+        resource: "User",
+        resourceId: user._id,
+        details: { email: user.email },
+      });
+    } catch (auditErr) {
+      console.warn("Audit log creation error on password reset:", auditErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Password has been reset successfully. You can now login with your new password.",
+    });
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Unable to reset password",
+    });
+  }
+};
+
 module.exports = {
   register,
   verifyPhone,
@@ -637,7 +849,11 @@ module.exports = {
   getAllUsers,
   getBranchUsers,
   toggleUserStatus,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
 };
+
 
 
 

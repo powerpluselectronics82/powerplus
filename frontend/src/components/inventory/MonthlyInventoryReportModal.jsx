@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   Edit3,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 import { useAppSelector } from '../../redux/hooks';
@@ -286,6 +287,101 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
     printWindow.document.close();
   };
 
+  const handleDownloadExcel = () => {
+    if (!reportData || filteredItems.length === 0) {
+      alert('No product intake records available to export for the selected month.');
+      return;
+    }
+
+    const branchName = currentBranch ? currentBranch.name : 'All_Branches';
+    const monthFormatted = new Date(`${month}-01`).toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+
+    let csvContent = '\uFEFF'; // UTF-8 BOM for Microsoft Excel compatibility
+    csvContent += `Monthly Inventory Intake Report - ${monthFormatted}\n`;
+    csvContent += `Branch: ${branchName}, Generated On: ${new Date().toLocaleString('en-IN')}\n`;
+    csvContent += `Total Batches: ${reportData.totalBatches || filteredItems.length}, Total Units Added: ${reportData.totalUnitsAdded || 0}, Total Purchase Valuation: ₹${Number(reportData.totalIntakeCost || 0).toFixed(2)}\n\n`;
+
+    const headers = [
+      'Intake Date & Time',
+      'Branch',
+      'Product Name',
+      'Barcode',
+      'Category',
+      'Brand',
+      'Model Number',
+      'HSN Code',
+      'Description',
+      'Technical Specifications',
+      'Product Type',
+      'Stock Added (Units)',
+      'Purchase Price (INR)',
+      'Total Value (INR)',
+      'Serial Numbers & Status',
+    ];
+
+    csvContent += headers.map((h) => `"${h.replace(/"/g, '""')}"`).join(',') + '\n';
+
+    filteredItems.forEach((item) => {
+      const dt = new Date(item.createdAt).toLocaleString('en-IN');
+      const bName = item.branchName || branchName;
+      const pName = item.name || '';
+      const barcode = item.barcode || '';
+      const category = item.category || 'General';
+      const brand = item.brand || '';
+      const model = item.modelNumber || '';
+      const hsn = item.hsnCode || '';
+      const desc = item.description || '';
+
+      const specsList = extractSpecsList(item.specifications);
+      const specsStr = specsList.map((s) => `${s.label}: ${s.val}`).join('; ');
+
+      const pType = item.isSerialized ? 'Serialized' : 'Standard';
+      const qty = item.stockAdded || 0;
+      const buyPrice = Number(item.purchasePrice || 0).toFixed(2);
+      const totalVal = Number(item.totalPurchaseValue || (item.purchasePrice * item.stockAdded) || 0).toFixed(2);
+
+      const serialsStr = Array.isArray(item.serialNumbers) && item.serialNumbers.length > 0
+        ? item.serialNumbers.map((s) => {
+            const sn = typeof s === 'object' ? s.serialNumber : s;
+            const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+            return `${sn} (${String(status).toUpperCase()})`;
+          }).join('; ')
+        : 'N/A';
+
+      const row = [
+        dt,
+        bName,
+        pName,
+        barcode,
+        category,
+        brand,
+        model,
+        hsn,
+        desc,
+        specsStr,
+        pType,
+        qty,
+        buyPrice,
+        totalVal,
+        serialsStr,
+      ];
+
+      csvContent += row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(',') + '\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `Monthly_Inventory_Intake_${month}_${branchName.replace(/\s+/g, '_')}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
@@ -311,6 +407,16 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownloadExcel}
+              disabled={!reportData || filteredItems.length === 0}
+              className="btn-secondary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 shadow-2xs disabled:opacity-50 cursor-pointer transition-colors"
+              title="Download Monthly Inventory Intake Report as Excel CSV"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+              <span>Export Excel</span>
+            </button>
+
             <button
               onClick={handlePrint}
               disabled={!reportData || filteredItems.length === 0}

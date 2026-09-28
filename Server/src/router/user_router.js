@@ -8,6 +8,9 @@ const {
   getAllUsers,
   getBranchUsers,
   toggleUserStatus,
+  forgotPassword,
+  verifyResetOtp,
+  resetPassword,
 } = require("../controller/user_controller");
 const {
   auth,
@@ -18,10 +21,13 @@ const {
 const { loginLimiter, apiLimiter } = require("../middleware/rateLimiter");
 
 // Public authentication routes
-api.post("/register", auth,isOwner, loginLimiter, register);
+api.post("/register", auth, isOwner, loginLimiter, register);
 api.post("/login", loginLimiter, login);
 api.post("/resend-phone-otp", loginLimiter, resendPhoneOtp);
 api.post("/verify-phone", loginLimiter, verifyPhone);
+api.post("/forgot-password", loginLimiter, forgotPassword);
+api.post("/verify-reset-otp", loginLimiter, verifyResetOtp);
+api.post("/reset-password", loginLimiter, resetPassword);
 
 // Protected user listing routes
 // Owner can see all users. Branch manager or owner can see branch users.

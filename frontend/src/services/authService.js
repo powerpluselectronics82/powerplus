@@ -18,6 +18,18 @@ export const authService = {
     return await api.post('/resend-phone-otp', { userId });
   },
 
+  forgotPassword: async (email) => {
+    return await api.post('/forgot-password', { email });
+  },
+
+  verifyResetOtp: async (email, otp) => {
+    return await api.post('/verify-reset-otp', { email, otp });
+  },
+
+  resetPassword: async (email, otp, newPassword) => {
+    return await api.post('/reset-password', { email, otp, newPassword });
+  },
+
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');

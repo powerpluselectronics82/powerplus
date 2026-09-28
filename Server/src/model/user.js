@@ -85,6 +85,18 @@ const userSchema = new mongoose.Schema(
       enum: ["PENDING", "ACTIVE", "INACTIVE"],
       default: "ACTIVE",
     },
+
+    resetPasswordOtp: {
+      type: String,
+      default: null,
+      select: false,
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+      select: false,
+    },
   },
   {
     timestamps: true,
