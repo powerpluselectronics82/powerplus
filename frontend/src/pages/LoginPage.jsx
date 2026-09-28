@@ -6,7 +6,6 @@ import {
   Mail,
   ArrowRight,
   ShieldCheck,
-  Zap,
   AlertCircle,
   KeyRound,
   Eye,
@@ -19,7 +18,7 @@ import {
 import { PowerPlusLogo } from '../components/common/PowerPlusLogo';
 
 export const LoginPage = () => {
-  const { login, loginAsDemo, loading } = useAuth();
+  const { login, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -38,6 +37,7 @@ export const LoginPage = () => {
   const [resetSuccess, setResetSuccess] = useState('');
   const [countdown, setCountdown] = useState(0);
   const [resending, setResending] = useState(false);
+  const [devOtpHint, setDevOtpHint] = useState('');
 
   // Countdown timer for resending OTP
   useEffect(() => {
@@ -90,7 +90,12 @@ export const LoginPage = () => {
       if (res.success) {
         setResetStep(2);
         setCountdown(60);
-        setResetSuccess(res.message || 'OTP verification code sent to your email.');
+        if (res.data?.devOtp) {
+          setDevOtpHint(res.data.devOtp);
+        } else {
+          setDevOtpHint('');
+        }
+        setResetSuccess(res.message || 'OTP verification code generated.');
       } else {
         setResetError(res.message || 'Failed to send OTP code');
       }
@@ -109,7 +114,10 @@ export const LoginPage = () => {
       const res = await authService.forgotPassword(resetEmail.trim());
       if (res.success) {
         setCountdown(60);
-        setResetSuccess('A fresh 6-digit OTP code has been sent to your email.');
+        if (res.data?.devOtp) {
+          setDevOtpHint(res.data.devOtp);
+        }
+        setResetSuccess('A fresh 6-digit OTP code has been generated.');
       } else {
         setResetError(res.message || 'Failed to resend OTP code');
       }
@@ -245,38 +253,6 @@ export const LoginPage = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
-
-          {/* Quick Demo Access Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-200" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-white px-3 text-slate-400 font-bold tracking-widest">
-                Or Instant Demo Access
-              </span>
-            </div>
-          </div>
-
-          {/* Instant 1-Click Role Logins */}
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { role: 'OWNER', label: 'Owner Admin', color: 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200' },
-              { role: 'BRANCH_MANAGER', label: 'Branch Manager', color: 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200' },
-              { role: 'CASHIER', label: 'Cashier POS', color: 'bg-amber-50 hover:bg-amber-100 text-amber-700 border-amber-200' },
-              { role: 'INVENTORY_STAFF', label: 'Inventory Staff', color: 'bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200' },
-            ].map((d) => (
-              <button
-                key={d.role}
-                type="button"
-                onClick={() => loginAsDemo(d.role)}
-                className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-between ${d.color}`}
-              >
-                <span>{d.label}</span>
-                <Zap className="w-3.5 h-3.5 shrink-0 opacity-70" />
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -389,6 +365,30 @@ export const LoginPage = () => {
                 </div>
 
                 <form onSubmit={handleResetPassword} className="space-y-4">
+                  {devOtpHint && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl text-xs space-y-1.5">
+                      <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>Email Credentials Not Configured</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700 leading-relaxed">
+                        To receive emails in your real mailbox, configure <code className="bg-amber-100 font-mono px-1 py-0.5 rounded">EMAIL_USER</code> and <code className="bg-amber-100 font-mono px-1 py-0.5 rounded">EMAIL_PASS</code> in <code className="bg-amber-100 font-mono px-1 py-0.5 rounded">Server/.env</code>.
+                      </p>
+                      <div className="pt-1 flex items-center justify-between">
+                        <span className="font-semibold text-amber-950">
+                          Your OTP Code: <strong className="font-mono text-sm tracking-widest text-indigo-700 bg-white px-2 py-0.5 rounded border border-amber-300 ml-1">{devOtpHint}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setResetOtp(devOtpHint)}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline ml-2 cursor-pointer"
+                        >
+                          Auto-Fill
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">

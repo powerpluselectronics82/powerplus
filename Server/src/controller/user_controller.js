@@ -688,11 +688,14 @@ const forgotPassword = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Password reset OTP sent to your email address",
+      message: emailResult?.delivered
+        ? "Password reset OTP sent to your email address"
+        : "OTP generated. (Email credentials not configured in .env - check server console or dev OTP below)",
       data: {
         email: user.email,
         expiresInSeconds: 600,
-        delivered: emailResult?.delivered,
+        delivered: !!emailResult?.delivered,
+        ...(!emailResult?.delivered ? { devOtp: otp } : {}),
       },
     });
   } catch (error) {
