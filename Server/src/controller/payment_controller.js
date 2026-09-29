@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const redis = require("../config/redis");
 const Payment = require("../model/payment");
 const Sale = require("../model/sale");
+const User = require("../model/user");
 const { createAuditLog } = require("../utils/auditLogger");
 
 // Invalidate sales Redis caches
@@ -34,7 +35,23 @@ const invalidateSaleCaches = async (companyId, branchId, cashierId) => {
 const receivePayment = async (req, res) => {
   const companyId = req.user?.companyId;
   const recordedBy = req.user?._id || req.user?.userId;
-  const recordedByName = req.user?.name || "Cashier";
+
+  let recordedByName = (req.body.recordedByName || req.body.receiverName || req.user?.name || "").trim();
+  if (!recordedByName || recordedByName.toLowerCase() === "cashier") {
+    if (recordedBy && mongoose.isValidObjectId(recordedBy)) {
+      try {
+        const userObj = await User.findById(recordedBy).select("name").lean();
+        if (userObj?.name) {
+          recordedByName = userObj.name;
+        }
+      } catch (err) {
+        console.warn("Could not lookup user name in receivePayment:", err.message);
+      }
+    }
+  }
+  if (!recordedByName || recordedByName.toLowerCase() === "cashier") {
+    recordedByName = req.user?.name || req.user?.role || "Staff";
+  }
 
   const {
     saleId,
@@ -213,6 +230,20 @@ const getPaymentHistoryBySale = async (req, res) => {
     })
       .sort({ paymentDate: -1 })
       .lean();
+
+    // Populate actual user name for existing payments where recordedByName is 'Cashier' or empty
+    for (const p of payments) {
+      if ((!p.recordedByName || p.recordedByName.toLowerCase() === "cashier") && p.recordedBy) {
+        if (mongoose.isValidObjectId(p.recordedBy)) {
+          try {
+            const u = await User.findById(p.recordedBy).select("name").lean();
+            if (u?.name) {
+              p.recordedByName = u.name;
+            }
+          } catch (_) {}
+        }
+      }
+    }
 
     const sale = await Sale.findOne({ _id: saleId, companyId })
       .select("invoiceNumber grandTotal paidAmount dueAmount paymentStatus customerName customerPhone createdAt")

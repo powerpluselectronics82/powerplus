@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { X, History, Banknote, QrCode, CreditCard, Calendar, Clock, AlertCircle } from 'lucide-react';
 import { paymentService } from '../../services/paymentService';
+import { useAuth } from '../../context/AuthContext';
 
 export const PaymentHistoryModal = ({ isOpen, onClose, saleId, onReceivePaymentClick }) => {
+  const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [historyData, setHistoryData] = useState({ sale: null, payments: [] });
@@ -214,8 +216,10 @@ export const PaymentHistoryModal = ({ isOpen, onClose, saleId, onReceivePaymentC
                         <td className="p-2.5 text-slate-600 font-mono text-[11px]">
                           {p.transactionRef || (p.notes ? <span className="italic text-slate-400">{p.notes}</span> : '-')}
                         </td>
-                        <td className="p-2.5 text-slate-700 font-medium">
-                          {p.recordedByName || 'Cashier'}
+                        <td className="p-2.5 text-slate-700 font-semibold">
+                          {p.recordedByName && p.recordedByName.toLowerCase() !== 'cashier'
+                            ? p.recordedByName
+                            : (user?.name || 'Authorized Staff')}
                         </td>
                       </tr>
                     ))}

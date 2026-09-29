@@ -7,8 +7,10 @@ import { useAppSelector } from '../../redux/hooks';
 import { ReceivePaymentModal } from './ReceivePaymentModal';
 import { PaymentHistoryModal } from './PaymentHistoryModal';
 import { saleService } from '../../services/saleService';
+import { useAuth } from '../../context/AuthContext';
 
 export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaymentUpdated }) => {
+  const { user } = useAuth();
   if (!isOpen || !sale) return null;
 
   const [activeSale, setActiveSale] = useState(sale);
@@ -220,7 +222,8 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
     sale?.buyerGstin ??
     sale?.customer?.gstin ??
     '';
-  const cashierName = activeSale.cashierName || sale.cashierName || 'Cashier';
+  const cashierRaw = activeSale.cashierName || sale.cashierName || activeSale.recordedByName || sale.recordedByName || '';
+  const cashierName = cashierRaw && cashierRaw.toLowerCase() !== 'cashier' ? cashierRaw : (user?.name || 'Staff');
   const branchName = activeSale.branchName || sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
   const branchCode = targetBranch?.code || branch?.code || 'BR01';
   const companyName = company?.name || 'POWER PLUS ELECTRONICS';

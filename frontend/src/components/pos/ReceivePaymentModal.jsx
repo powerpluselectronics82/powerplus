@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, CheckCircle, AlertCircle, Banknote, QrCode, CreditCard, ShieldCheck } from 'lucide-react';
 import { paymentService } from '../../services/paymentService';
+import { useAuth } from '../../context/AuthContext';
 
 export const ReceivePaymentModal = ({
   isOpen,
@@ -8,6 +9,7 @@ export const ReceivePaymentModal = ({
   sale,
   onPaymentSuccess,
 }) => {
+  const { user } = useAuth();
   const [amount, setAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [transactionRef, setTransactionRef] = useState('');
@@ -56,6 +58,8 @@ export const ReceivePaymentModal = ({
         paymentMethod,
         transactionRef: transactionRef.trim(),
         notes: notes.trim(),
+        recordedByName: user?.name || '',
+        receiverName: user?.name || '',
       });
 
       if (res.success) {
@@ -130,6 +134,13 @@ export const ReceivePaymentModal = ({
                 <span className="text-[10px] text-rose-700 block">Current Due</span>
                 <span className="font-extrabold text-rose-700 text-xs">₹{dueAmount.toFixed(2)}</span>
               </div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+              <span className="text-slate-600 font-medium">Payment Receiver:</span>
+              <span className="font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                {user?.name || 'Staff'}
+              </span>
             </div>
           </div>
 

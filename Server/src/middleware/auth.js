@@ -25,6 +25,8 @@ module.exports = function auth(req, res, next) {
       companyId: payload.companyId,
       branchId: payload.branchId,
       role: payload.role,
+      name: payload.name || "",
+      email: payload.email || "",
     };
 
     return next();

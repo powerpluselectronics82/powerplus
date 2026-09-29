@@ -104,6 +104,16 @@ export const ReceiptModal = () => {
               <span className="font-bold block">Payment Method:</span>
               <span className="badge badge-emerald text-[10px]">{completedSale.paymentMethod}</span>
             </div>
+            {(completedSale.cashierName || completedSale.recordedByName) && (
+              <div className="col-span-2 pt-1 border-t border-slate-100 flex justify-between text-[11px]">
+                <span className="text-slate-500">Received By:</span>
+                <span className="font-semibold text-slate-800">
+                  {completedSale.cashierName && completedSale.cashierName.toLowerCase() !== 'cashier'
+                    ? completedSale.cashierName
+                    : (completedSale.recordedByName || 'Staff')}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Item Table */}

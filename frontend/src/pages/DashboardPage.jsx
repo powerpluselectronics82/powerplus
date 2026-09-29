@@ -440,7 +440,7 @@ export const DashboardPage = () => {
                       </span>
                     </td>
                     <td className="font-medium text-slate-700">
-                      {sale.cashierName || 'Cashier'}
+                      {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
                     </td>
                     <td className="text-right font-mono font-bold text-slate-900 text-sm">
                       ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
@@ -850,7 +850,9 @@ export const DashboardPage = () => {
                           <td>
                             <span className="badge badge-indigo text-[10px]">{sale.paymentMethod || 'CASH'}</span>
                           </td>
-                          <td className="text-slate-600">{sale.cashierName || 'Cashier'}</td>
+                          <td className="text-slate-600">
+                            {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
+                          </td>
                           <td className="text-right font-mono font-bold text-slate-900">
                             ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
                           </td>
@@ -932,7 +934,9 @@ export const DashboardPage = () => {
                 <td className="p-2 border-r border-gray-200">{sale.customerName || 'Walk-in'}</td>
                 <td className="p-2 border-r border-gray-200 font-mono">{sale.customerPhone || '-'}</td>
                 <td className="p-2 border-r border-gray-200">{sale.paymentMethod || 'CASH'}</td>
-                <td className="p-2 border-r border-gray-200">{sale.cashierName || 'Cashier'}</td>
+                <td className="p-2 border-r border-gray-200">
+                  {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
+                </td>
                 <td className="p-2 text-right font-mono font-bold">
                   ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
                 </td>
