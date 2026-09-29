@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import {
-  Lock,
-  Mail,
   ArrowRight,
   ShieldCheck,
   AlertCircle,
@@ -21,6 +19,7 @@ export const LoginPage = () => {
   const { login, loading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
   // Password Reset Modal States
@@ -205,17 +204,14 @@ export const LoginPage = () => {
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                 Work Email Address
               </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@company.com"
-                  className="input-tactile pl-10"
-                />
-              </div>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="admin@company.com"
+                className="input-tactile"
+              />
             </div>
 
             <div>
@@ -232,15 +228,26 @@ export const LoginPage = () => {
                 </button>
               </div>
               <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••••"
-                  className="input-tactile pl-10"
+                  className="input-tactile pr-10"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 focus:outline-none transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </button>
               </div>
             </div>
 
@@ -312,18 +319,15 @@ export const LoginPage = () => {
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                       Registered Email
                     </label>
-                    <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
-                      <input
-                        type="email"
-                        required
-                        value={resetEmail}
-                        onChange={(e) => setResetEmail(e.target.value)}
-                        placeholder="you@company.com"
-                        className="input-tactile pl-10"
-                        autoFocus
-                      />
-                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="you@company.com"
+                      className="input-tactile"
+                      autoFocus
+                    />
                   </div>
 
                   <div className="pt-2 flex items-center gap-2">
@@ -428,7 +432,6 @@ export const LoginPage = () => {
                       New Password
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
                         type={showNewPassword ? 'text' : 'password'}
                         required
@@ -436,12 +439,12 @@ export const LoginPage = () => {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="••••••••••••"
-                        className="input-tactile pl-10 pr-10"
+                        className="input-tactile pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600"
+                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 focus:outline-none"
                       >
                         {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -453,7 +456,6 @@ export const LoginPage = () => {
                       Confirm New Password
                     </label>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5" />
                       <input
                         type={showConfirmPassword ? 'text' : 'password'}
                         required
@@ -461,12 +463,12 @@ export const LoginPage = () => {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••••••"
-                        className="input-tactile pl-10 pr-10"
+                        className="input-tactile pr-10"
                       />
                       <button
                         type="button"
                         onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600"
+                        className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 focus:outline-none"
                       >
                         {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
