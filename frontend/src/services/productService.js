@@ -26,7 +26,15 @@ export const productService = {
     return await api.patch(`/productStatus/${id}`);
   },
 
+  deleteProduct: async (id) => {
+    return await api.delete(`/product/${id}`);
+  },
+
   // Branch inventory & stock
+  addProductWithIntake: async (data) => {
+    return await api.post('/addProductWithIntake', data);
+  },
+
   addBranchInventory: async (inventoryData) => {
     return await api.post('/addBranchInventory', inventoryData);
   },

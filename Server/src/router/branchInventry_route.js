@@ -4,6 +4,7 @@ const { auth, allowed } = require("../middleware");
 const { apiLimiter } = require("../middleware/rateLimiter");
 const {
   addBranchInventory,
+  addProductWithIntake,
   getBranchInventoryProducts,
   getLowStockBranchProducts,
   getBranchStockValuation,
@@ -75,6 +76,14 @@ router.post(
   allowed(["OWNER", "BRANCH_MANAGER", "INVENTORY_STAFF"]),
   apiLimiter,
   addBranchInventory,
+);
+
+router.post(
+  "/addProductWithIntake",
+  auth,
+  allowed(["OWNER", "BRANCH_MANAGER", "INVENTORY_STAFF"]),
+  apiLimiter,
+  addProductWithIntake,
 );
 
 router.put(

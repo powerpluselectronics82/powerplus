@@ -300,6 +300,33 @@ const updateProductStatus = async (req, res) => {
   }
 };
 
+const deleteProduct = async (req, res) => {
+  try {
+    const companyId = req.user.companyId;
+    const { id } = req.params;
+
+    if (!id) return res.status(400).json({ success: false, message: "product id is required" });
+
+    const product = await Product.findOne({ _id: id, companyId });
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+
+    await Product.findByIdAndDelete(id);
+
+    try {
+      await redis.del(
+        getProductsListKey(companyId),
+        getProductCacheKey(companyId, id),
+        getProductBarcodeKey(companyId, product.barcode)
+      );
+    } catch (rErr) {}
+
+    return res.status(200).json({ success: true, message: "Product deleted successfully" });
+  } catch (error) {
+    console.error("Delete product error:", error);
+    return res.status(500).json({ success: false, message: "Unable to delete product" });
+  }
+};
+
 module.exports = {
   addProduct,
   getAllproduct,
@@ -307,4 +334,5 @@ module.exports = {
   getProductByBarcode,
   getProductByModelNumber,
   updateProductStatus,
+  deleteProduct,
 };

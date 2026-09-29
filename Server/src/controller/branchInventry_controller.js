@@ -408,12 +408,16 @@ const addBranchInventory = async (req, res) => {
 			purchasePrice: inventoryPurchasePrice,
 		});
 
+		let isNewBranchInventory = false;
+		let prevStock = 0;
 		if (inventory) {
+			prevStock = inventory.stock;
 			inventory.stock += requestedQuantity;
 			if (manufacturingDate !== undefined) inventory.manufacturingDate = manufacturingDate;
 			if (expiryDate !== undefined) inventory.expiryDate = expiryDate;
 			await inventory.save();
 		} else {
+			isNewBranchInventory = true;
 			inventory = await BranchInventory.create({
 				companyId,
 				branchId,
@@ -426,28 +430,46 @@ const addBranchInventory = async (req, res) => {
 			});
 		}
 
-		const inventoryTransaction = await InventoryTransaction.create({
-			companyId,
-			branchId,
-			productId,
-			quantity: requestedQuantity,
-			purchasePrice: inventoryPurchasePrice,
-			barcode: product.barcode,
-			sellingPrice: 0,
-			serialNumbers: isSerialized ? serials : [],
-		});
-
+		let inventoryTransaction = null;
 		let units = [];
-		if (isSerialized) {
-			units = await InventoryUnit.create(serials.map((serialNumber) => ({
+		try {
+			inventoryTransaction = await InventoryTransaction.create({
 				companyId,
 				branchId,
 				productId,
-				serialNumber,
-				barcode: product.barcode,
+				quantity: requestedQuantity,
 				purchasePrice: inventoryPurchasePrice,
-				status: "available",
-			})));
+				barcode: product.barcode,
+				sellingPrice: 0,
+				serialNumbers: isSerialized ? serials : [],
+			});
+
+			if (isSerialized) {
+				units = await InventoryUnit.create(serials.map((serialNumber) => ({
+					companyId,
+					branchId,
+					productId,
+					serialNumber,
+					barcode: product.barcode,
+					purchasePrice: inventoryPurchasePrice,
+					status: "available",
+				})));
+			}
+		} catch (innerCreateErr) {
+			// Rollback to prevent partial data save
+			if (units.length > 0) {
+				await InventoryUnit.deleteMany({ _id: { $in: units.map((u) => u._id) } }).catch(() => {});
+			}
+			if (inventoryTransaction && inventoryTransaction._id) {
+				await InventoryTransaction.findByIdAndDelete(inventoryTransaction._id).catch(() => {});
+			}
+			if (isNewBranchInventory && inventory && inventory._id) {
+				await BranchInventory.findByIdAndDelete(inventory._id).catch(() => {});
+			} else if (!isNewBranchInventory && inventory && inventory._id) {
+				inventory.stock = prevStock;
+				await inventory.save().catch(() => {});
+			}
+			throw innerCreateErr;
 		}
 
 		await createAuditLog(req, {
@@ -473,6 +495,303 @@ const addBranchInventory = async (req, res) => {
 		return res.status(error.statusCode || (error.code === 11000 ? 409 : 500)).json({
 			success: false,
 			message: error.code === 11000 ? "Inventory or serial number already exists" : error.message || "Unable to add branch inventory",
+		});
+	}
+};
+
+/**
+ * ATOMIC: Create Global Catalog Product and Receive Branch Stock Intake in a single operation.
+ * If ANY validation fails (e.g. duplicate serial numbers), or ANY database error occurs,
+ * NOTHING is saved and all created documents are cleanly rolled back.
+ */
+const addProductWithIntake = async (req, res) => {
+	try {
+		const companyId = req.user?.companyId;
+		const {
+			product: rawProduct,
+			intake: rawIntake,
+			barcode: flatBarcode,
+			name: flatName,
+			modelNumber: flatModelNumber,
+			hsnCode: flatHsnCode,
+			description: flatDescription,
+			category: flatCategory,
+			categoryId: flatCategoryId,
+			brand: flatBrand,
+			brandId: flatBrandId,
+			isSerialized: flatIsSerialized,
+			cgstRate: flatCgstRate,
+			sgstRate: flatSgstRate,
+			igstRate: flatIgstRate,
+			minStockLevel: flatMinStockLevel,
+			specifications: flatSpecifications,
+			branchId: flatBranchId,
+			quantity: flatQuantity,
+			purchasePrice: flatPurchasePrice,
+			serialNumbers: flatSerialNumbers,
+			manufacturingDate: flatManufacturingDate,
+			expiryDate: flatExpiryDate,
+		} = req.body || {};
+
+		const pData = rawProduct || {
+			barcode: flatBarcode,
+			name: flatName,
+			modelNumber: flatModelNumber,
+			hsnCode: flatHsnCode,
+			description: flatDescription,
+			category: flatCategory,
+			categoryId: flatCategoryId,
+			brand: flatBrand,
+			brandId: flatBrandId,
+			isSerialized: flatIsSerialized,
+			cgstRate: flatCgstRate,
+			sgstRate: flatSgstRate,
+			igstRate: flatIgstRate,
+			minStockLevel: flatMinStockLevel,
+			specifications: flatSpecifications,
+		};
+
+		const iData = rawIntake || {
+			branchId: flatBranchId,
+			quantity: flatQuantity,
+			purchasePrice: flatPurchasePrice,
+			serialNumbers: flatSerialNumbers,
+			manufacturingDate: flatManufacturingDate,
+			expiryDate: flatExpiryDate,
+		};
+
+		const cleanBarcode = String(pData.barcode || "").trim();
+		const productName = String(pData.name || "").trim();
+		const targetBranchId = iData.branchId || req.user.branchId;
+
+		// 1. Basic validation
+		if (!cleanBarcode) {
+			return res.status(400).json({ success: false, message: "Barcode is required" });
+		}
+		if (!productName) {
+			return res.status(400).json({ success: false, message: "Product name is required" });
+		}
+		if (!targetBranchId) {
+			return res.status(400).json({ success: false, message: "branchId is required" });
+		}
+
+		// 2. Validate branch exists & active
+		const branch = await Branch.findOne({ _id: targetBranchId, companyId, status: "ACTIVE" });
+		if (!branch) {
+			return res.status(404).json({ success: false, message: "Branch not found or inactive" });
+		}
+
+		// 3. Check duplicate product barcode in advance
+		const existingProduct = await Product.findOne({ companyId, barcode: cleanBarcode });
+		if (existingProduct) {
+			return res.status(409).json({ success: false, message: `Product with barcode "${cleanBarcode}" already exists` });
+		}
+
+		// 4. Validate quantity & price
+		const requestedQuantity = Number(iData.quantity);
+		if (!Number.isInteger(requestedQuantity) || requestedQuantity <= 0) {
+			return res.status(400).json({ success: false, message: "quantity must be a positive integer" });
+		}
+
+		const inventoryPurchasePrice = Number(iData.purchasePrice || 0);
+		if (isNaN(inventoryPurchasePrice) || inventoryPurchasePrice < 0) {
+			return res.status(400).json({ success: false, message: "purchasePrice must be a valid non-negative number" });
+		}
+
+		// 5. Validate serial numbers BEFORE saving anything
+		const isSerialized = Boolean(pData.isSerialized);
+		const rawSerials = Array.isArray(iData.serialNumbers) ? iData.serialNumbers : [];
+		const serials = rawSerials.map((s) => String(s).trim()).filter(Boolean);
+
+		if (isSerialized) {
+			if (serials.length !== requestedQuantity) {
+				return res.status(400).json({
+					success: false,
+					message: `For serialized products, quantity (${requestedQuantity}) must match count of serial numbers (${serials.length})`,
+				});
+			}
+
+			// Duplicate check within payload (case-insensitive)
+			const seenLower = new Set();
+			const duplicateList = [];
+			for (const s of serials) {
+				const lower = s.toLowerCase();
+				if (seenLower.has(lower)) {
+					duplicateList.push(s);
+				}
+				seenLower.add(lower);
+			}
+
+			if (duplicateList.length > 0) {
+				return res.status(409).json({
+					success: false,
+					message: `Duplicate serial numbers provided: "${[...new Set(duplicateList)].join('", "')}". Each serial number must be unique.`,
+				});
+			}
+
+			// Check if ANY serial number already exists in database
+			const existingUnits = await InventoryUnit.find({ companyId, serialNumber: { $in: serials } }).select("serialNumber").lean();
+			if (existingUnits.length > 0) {
+				const existingSerialNames = existingUnits.map((u) => u.serialNumber).join('", "');
+				return res.status(409).json({
+					success: false,
+					message: `Serial number(s) "${existingSerialNames}" already exist in inventory. Each unit must have a unique serial number.`,
+				});
+			}
+		} else if (serials.length > 0) {
+			return res.status(400).json({ success: false, message: "Non-serialized products cannot have serial numbers" });
+		}
+
+		// 6. ALL VALIDATIONS PASSED. Now write to database with full rollback protection.
+		let createdProduct = null;
+		let createdInventory = null;
+		let isNewInventory = false;
+		let prevStock = 0;
+		let createdTransaction = null;
+		let createdUnits = [];
+
+		try {
+			// A. Create Global Catalog Product
+			createdProduct = await Product.create({
+				companyId,
+				barcode: cleanBarcode,
+				name: productName,
+				modelNumber: pData.modelNumber ? String(pData.modelNumber).trim() : "",
+				hsnCode: pData.hsnCode ? String(pData.hsnCode).trim() : "",
+				description: pData.description ? String(pData.description).trim() : "",
+				category: pData.category || "General",
+				categoryId: pData.categoryId || null,
+				brand: pData.brand || "",
+				brandId: pData.brandId || null,
+				isSerialized,
+				cgstRate: Number(pData.cgstRate ?? 9),
+				sgstRate: Number(pData.sgstRate ?? 9),
+				igstRate: Number(pData.igstRate ?? 0),
+				minStockLevel: Number(pData.minStockLevel ?? 2),
+				specifications: pData.specifications || {},
+			});
+
+			// B. Create / Update Branch Inventory
+			createdInventory = await BranchInventory.findOne({
+				companyId,
+				branchId: targetBranchId,
+				productId: createdProduct._id,
+				purchasePrice: inventoryPurchasePrice,
+			});
+
+			if (createdInventory) {
+				prevStock = createdInventory.stock;
+				createdInventory.stock += requestedQuantity;
+				if (iData.manufacturingDate !== undefined) createdInventory.manufacturingDate = iData.manufacturingDate;
+				if (iData.expiryDate !== undefined) createdInventory.expiryDate = iData.expiryDate;
+				await createdInventory.save();
+			} else {
+				isNewInventory = true;
+				createdInventory = await BranchInventory.create({
+					companyId,
+					branchId: targetBranchId,
+					productId: createdProduct._id,
+					purchasePrice: inventoryPurchasePrice,
+					manufacturingDate: iData.manufacturingDate,
+					expiryDate: iData.expiryDate,
+					barcode: createdProduct.barcode,
+					stock: requestedQuantity,
+				});
+			}
+
+			// C. Create Inventory Transaction
+			createdTransaction = await InventoryTransaction.create({
+				companyId,
+				branchId: targetBranchId,
+				productId: createdProduct._id,
+				quantity: requestedQuantity,
+				purchasePrice: inventoryPurchasePrice,
+				barcode: createdProduct.barcode,
+				sellingPrice: 0,
+				serialNumbers: isSerialized ? serials : [],
+			});
+
+			// D. Create Inventory Units
+			if (isSerialized && serials.length > 0) {
+				createdUnits = await InventoryUnit.create(serials.map((serialNumber) => ({
+					companyId,
+					branchId: targetBranchId,
+					productId: createdProduct._id,
+					serialNumber,
+					barcode: createdProduct.barcode,
+					purchasePrice: inventoryPurchasePrice,
+					status: "available",
+				})));
+			}
+
+			// E. Invalidate Caches & Audit Log
+			await invalidateBranchInventoryCache(companyId, targetBranchId);
+			try {
+				await redis.del(
+					getProductsListKey(companyId),
+					getProductCacheKey(companyId, createdProduct._id),
+					getProductBarcodeKey(companyId, createdProduct.barcode)
+				);
+			} catch (rErr) {}
+
+			await createAuditLog(req, {
+				companyId,
+				branchId: targetBranchId,
+				action: "PRODUCT_AND_INVENTORY_INTAKE_CREATE",
+				resource: "Product",
+				resourceId: createdProduct._id,
+				details: {
+					productId: createdProduct._id,
+					barcode: createdProduct.barcode,
+					name: createdProduct.name,
+					quantity: requestedQuantity,
+					purchasePrice: inventoryPurchasePrice,
+					serialNumbers: serials,
+				},
+			});
+
+			return res.status(201).json({
+				success: true,
+				message: `Product "${createdProduct.name}" created and ${requestedQuantity} unit(s) received into branch stock`,
+				data: {
+					product: createdProduct,
+					inventory: createdInventory,
+					transaction: createdTransaction,
+					units: createdUnits,
+				},
+			});
+		} catch (innerErr) {
+			console.error("Database write error in addProductWithIntake, executing complete rollback:", innerErr);
+
+			// Clean up everything in reverse order so no orphaned data remains
+			if (createdUnits.length > 0) {
+				await InventoryUnit.deleteMany({ _id: { $in: createdUnits.map((u) => u._id) } }).catch((e) => console.error("Rollback units error:", e));
+			}
+			if (createdTransaction && createdTransaction._id) {
+				await InventoryTransaction.findByIdAndDelete(createdTransaction._id).catch((e) => console.error("Rollback transaction error:", e));
+			}
+			if (isNewInventory && createdInventory && createdInventory._id) {
+				await BranchInventory.findByIdAndDelete(createdInventory._id).catch((e) => console.error("Rollback inventory error:", e));
+			} else if (!isNewInventory && createdInventory && createdInventory._id) {
+				createdInventory.stock = prevStock;
+				await createdInventory.save().catch((e) => console.error("Rollback stock error:", e));
+			}
+			if (createdProduct && createdProduct._id) {
+				await Product.findByIdAndDelete(createdProduct._id).catch((e) => console.error("Rollback product error:", e));
+			}
+
+			return res.status(innerErr.code === 11000 ? 409 : 500).json({
+				success: false,
+				message: innerErr.code === 11000
+					? "Serial number or barcode already exists in database. All changes have been rolled back and nothing was saved."
+					: innerErr.message || "Failed to save product and receive stock. All changes have been rolled back.",
+			});
+		}
+	} catch (outerErr) {
+		console.error("addProductWithIntake error:", outerErr);
+		return res.status(500).json({
+			success: false,
+			message: outerErr.message || "Unable to process product and intake request",
 		});
 	}
 };
@@ -1189,6 +1508,7 @@ const updateBranchInventoryIntake = async (req, res) => {
 
 module.exports = {
 	addBranchInventory,
+	addProductWithIntake,
 	getBranchInventoryProducts,
 	getLowStockBranchProducts,
 	getBranchStockValuation,

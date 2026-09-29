@@ -460,16 +460,26 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         return;
       }
 
-      const duplicateCheck = new Set(cleanSerials);
-      if (duplicateCheck.size !== cleanSerials.length) {
-        setError('Duplicate serial numbers entered. Each serial number must be unique.');
+      // Case-insensitive duplicate check & find the exact duplicate serials
+      const seen = new Set();
+      const duplicateList = [];
+      for (const s of cleanSerials) {
+        const lower = s.toLowerCase();
+        if (seen.has(lower)) {
+          duplicateList.push(s);
+        }
+        seen.add(lower);
+      }
+
+      if (duplicateList.length > 0) {
+        const uniqueDupes = [...new Set(duplicateList)];
+        setError(`Duplicate serial number entered: "${uniqueDupes.join('", "')}". Every unit must have a unique serial number.`);
         return;
       }
     }
 
     setSubmitting(true);
     try {
-      // 1. If it's a NEW product, create the global catalog product with all technical details
       if (!isExistingProduct) {
         if (!formData.name.trim()) {
           setError('Product Name is required for new products');
@@ -524,45 +534,65 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
           },
         };
 
-        const createProdRes = await productService.addProduct(productPayload);
-        if (!createProdRes.success) {
-          throw new Error(createProdRes.message || 'Failed to create global product');
+        const inventoryPayload = {
+          branchId: targetBranchId,
+          barcode: cleanBarcode,
+          quantity: intakeQty,
+          purchasePrice: Number(formData.purchasePrice || 0),
+          serialNumbers: isSerializedProduct ? cleanSerials : [],
+        };
+
+        // ATOMIC: Single endpoint that creates global product & receives stock intake
+        // If anything fails, NOTHING is saved and everything is cleanly rolled back!
+        const res = await productService.addProductWithIntake({
+          product: productPayload,
+          intake: inventoryPayload,
+        });
+
+        if (!res.success) {
+          throw new Error(res.message || 'Failed to save product and receive stock');
         }
-      }
 
-      // 2. Receive Stock Intake into Branch (Matches purchasePrice batch)
-      const inventoryPayload = {
-        branchId: targetBranchId,
-        barcode: cleanBarcode,
-        quantity: intakeQty,
-        purchasePrice: Number(formData.purchasePrice || 0),
-        serialNumbers: isSerializedProduct ? cleanSerials : [],
-      };
+        setSuccessMsg(
+          `Success! Created product and added ${intakeQty} unit(s) of "${
+            formData.name || cleanBarcode
+          }" to branch inventory at ₹${Number(formData.purchasePrice || 0).toLocaleString('en-IN')}.`
+        );
+      } else {
+        // Existing catalog product: Receive stock intake into branch
+        const inventoryPayload = {
+          branchId: targetBranchId,
+          barcode: cleanBarcode,
+          quantity: intakeQty,
+          purchasePrice: Number(formData.purchasePrice || 0),
+          serialNumbers: isSerializedProduct ? cleanSerials : [],
+        };
 
-      const intakeRes = await productService.addBranchInventory(inventoryPayload);
-      if (intakeRes.success) {
+        const intakeRes = await productService.addBranchInventory(inventoryPayload);
+        if (!intakeRes.success) {
+          throw new Error(intakeRes.message || 'Failed to receive stock intake');
+        }
+
         setSuccessMsg(
           `Success! Added ${intakeQty} unit(s) of "${
             formData.name || selectedProduct?.name || cleanBarcode
           }" to branch inventory at ₹${Number(formData.purchasePrice || 0).toLocaleString('en-IN')}.`
         );
-
-        // Invalidate and refresh product caches
-        dispatch(invalidateProductCaches());
-        dispatch(fetchCatalogProducts({ force: true }));
-        if (targetBranchId) {
-          dispatch(fetchBranchProducts({ branchId: targetBranchId, force: true }));
-        }
-        if (onRefresh) onRefresh();
-
-        // Reset search for next scan
-        setTimeout(() => {
-          resetState();
-          searchInputRef.current?.focus();
-        }, 1500);
-      } else {
-        throw new Error(intakeRes.message || 'Failed to receive stock intake');
       }
+
+      // Invalidate and refresh product caches
+      dispatch(invalidateProductCaches());
+      dispatch(fetchCatalogProducts({ force: true }));
+      if (targetBranchId) {
+        dispatch(fetchBranchProducts({ branchId: targetBranchId, force: true }));
+      }
+      if (onRefresh) onRefresh();
+
+      // Reset search for next scan
+      setTimeout(() => {
+        resetState();
+        searchInputRef.current?.focus();
+      }, 1500);
     } catch (err) {
       console.error('Unified stock intake error:', err);
       setError(err.message || 'Error occurred while processing product intake');

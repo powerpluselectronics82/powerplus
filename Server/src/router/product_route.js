@@ -9,6 +9,7 @@ const {
 	getProductByBarcode,
 	getProductByModelNumber,
 	updateProductStatus,
+	deleteProduct,
 } = require("../controller/product_controller");
 
 const { apiLimiter } = require("../middleware/rateLimiter");
@@ -19,5 +20,6 @@ router.get("/product/:id", auth, apiLimiter, getProductById);
 router.get("/barcode/:barcode", auth, apiLimiter, getProductByBarcode);
 router.get("/modelNumber/:modelNumber", auth, apiLimiter, getProductByModelNumber);
 router.patch("/productStatus/:id", auth, allowed(["OWNER", "BRANCH_MANAGER", "INVENTORY_STAFF"]), apiLimiter, updateProductStatus);
+router.delete("/product/:id", auth, allowed(["OWNER", "BRANCH_MANAGER", "INVENTORY_STAFF"]), apiLimiter, deleteProduct);
 
 module.exports = router;
