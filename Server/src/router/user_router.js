@@ -21,7 +21,7 @@ const {
 const { loginLimiter, apiLimiter } = require("../middleware/rateLimiter");
 
 // Public authentication routes
-api.post("/register", loginLimiter, register);
+api.post("/register", auth, isOwner, loginLimiter, register);
 api.post("/login", loginLimiter, login);
 api.post("/resend-phone-otp", loginLimiter, resendPhoneOtp);
 api.post("/verify-phone", loginLimiter, verifyPhone);
