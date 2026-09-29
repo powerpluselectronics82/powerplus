@@ -483,7 +483,7 @@ export const DashboardPage = () => {
               )}
             </div>
             <p className="text-xs text-slate-500 font-medium mt-0.5">
-              Individual product sales with active warranties or warranties expiring within 1 month.
+              Individual product sales with warranties expiring within 1 month.
             </p>
           </div>
 
@@ -502,28 +502,13 @@ export const DashboardPage = () => {
         {/* Category Summary Pills / Filter Tabs */}
         <div className="flex flex-wrap items-center gap-2">
           <button
+            type="button"
             onClick={() => setWarrantyFilter('EXPIRING_SOON')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 ${warrantyFilter === 'EXPIRING_SOON'
-                ? 'bg-amber-600 text-white shadow-sm'
-                : 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200/80'
-              }`}
+            className="px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 bg-amber-600 text-white shadow-sm"
           >
             <span>⚠️ Expiring in 1 Month</span>
             <span className="px-1.5 py-0.5 rounded-md bg-amber-900/20 text-[10px] font-mono">
-              {warrantyData.summary?.expiringWithinMonthCount || 0}
-            </span>
-          </button>
-
-          <button
-            onClick={() => setWarrantyFilter('ACTIVE')}
-            className={`px-3 py-1.5 rounded-xl font-extrabold text-xs transition-all flex items-center gap-1.5 ${warrantyFilter === 'ACTIVE'
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200/80'
-              }`}
-          >
-            <span>✅ Active Warranty</span>
-            <span className="px-1.5 py-0.5 rounded-md bg-emerald-900/20 text-[10px] font-mono">
-              {warrantyData.summary?.activeCount || 0}
+              {warrantyData?.summary?.expiringWithinMonthCount || 0}
             </span>
           </button>
         </div>
