@@ -15,10 +15,12 @@ const {
   getCompanySummaryYear,
   getWarrantyStatus,
   updateSaleCustomerDetails,
+  deleteSaleInvoice,
 } = require("../controller/sale_controller");
 
 router.post("/create", auth, allowed(["OWNER", "BRANCH_MANAGER", "CASHIER"]), apiLimiter, createSale);
 router.patch("/updateCustomer/:saleId", auth, allowed(["OWNER", "BRANCH_MANAGER", "CASHIER"]), apiLimiter, updateSaleCustomerDetails);
+router.delete("/delete/:saleId", auth, allowed(["OWNER", "BRANCH_MANAGER"]), apiLimiter, deleteSaleInvoice);
 router.get("/allSales", auth, isOwner, apiLimiter, getAllSales);
 router.get("/branchSales/:branchId", auth, ownerOrBranchManager, apiLimiter, getBranchSales);
 router.get("/branchSales/:branchId/month", auth, ownerOrBranchManager, apiLimiter, getBranchMonthlySales);

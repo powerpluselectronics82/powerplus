@@ -66,4 +66,7 @@ export const saleService = {
     return await api.patch(`/updateCustomer/${saleId}`, customerData);
   },
 
+  deleteSale: async (saleId) => {
+    return await api.delete(`/delete/${saleId}`);
+  },
 };

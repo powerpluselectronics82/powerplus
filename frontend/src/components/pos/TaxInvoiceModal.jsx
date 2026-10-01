@@ -1,9 +1,13 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Printer, Download, CheckCircle, Building2, DollarSign, History, Edit2, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Printer, Download, CheckCircle, Building2, DollarSign, History, Edit2, Check, AlertCircle, Loader2, Trash2 } from 'lucide-react';
 import { numberToWordsInINR } from '../../utils/numberToWords';
 import { PowerPlusLogo } from '../common/PowerPlusLogo';
 import { useBranch } from '../../context/BranchContext';
-import { useAppSelector } from '../../redux/hooks';
+import { useAppSelector, useAppDispatch } from '../../redux/hooks';
+import { invalidateProductCaches } from '../../redux/slices/productsSlice';
+import { invalidateSalesCache } from '../../redux/slices/salesSlice';
+import { invalidateDueSalesCache } from '../../redux/slices/paymentsSlice';
+import { invalidateAnalyticsCache } from '../../redux/slices/analyticsSlice';
 import { ReceivePaymentModal } from './ReceivePaymentModal';
 import { PaymentHistoryModal } from './PaymentHistoryModal';
 import { saleService } from '../../services/saleService';
@@ -27,6 +31,14 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   });
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [customerEditError, setCustomerEditError] = useState('');
+
+  // Delete invoice state
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  const dispatch = useAppDispatch();
+  const canDelete = user?.role === 'OWNER' || user?.role === 'BRANCH_MANAGER';
 
   useEffect(() => {
     if (sale) {
@@ -320,6 +332,46 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
     }
   };
 
+  const handleDeleteInvoice = async () => {
+    const resolvedSaleId = activeSale?._id || activeSale?.id || sale?._id || sale?.id;
+    if (!resolvedSaleId) {
+      setDeleteError('Sale ID is missing');
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError('');
+
+    try {
+      const res = await saleService.deleteSale(resolvedSaleId);
+      if (res?.success || res?.message) {
+        setIsConfirmingDelete(false);
+        try {
+          if (dispatch) {
+            dispatch(invalidateProductCaches());
+            dispatch(invalidateSalesCache());
+            dispatch(invalidateDueSalesCache());
+            dispatch(invalidateAnalyticsCache());
+          }
+        } catch (_) {}
+
+        if (typeof onPaymentUpdated === 'function') {
+          onPaymentUpdated();
+        }
+        if (typeof onClose === 'function') {
+          onClose();
+        }
+      } else {
+        setDeleteError(res?.message || 'Failed to delete invoice');
+      }
+    } catch (err) {
+      console.error('Delete invoice error:', err);
+      setDeleteError(err.response?.data?.message || err.message || 'Failed to delete invoice');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto print:p-0 print:static print:bg-white print:overflow-visible">
       <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl overflow-hidden border border-slate-200 flex flex-col max-h-[92vh] print:max-h-none print:shadow-none print:border-none print:overflow-visible print:w-full print:max-w-none">
@@ -359,6 +411,17 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                 <History className="w-3.5 h-3.5 text-indigo-400" /> History
               </button>
             )}
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => setIsConfirmingDelete(true)}
+                className="py-1.5 px-2.5 rounded-lg border border-rose-900/60 bg-rose-950/60 text-rose-300 hover:text-white hover:bg-rose-600 text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                title="Delete this invoice and restore inventory stock"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                <span>Delete</span>
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="btn-primary py-1.5 px-3.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-500 shadow-md"
@@ -373,6 +436,66 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
             </button>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {isConfirmingDelete && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+            <div className="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl border border-rose-200">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-extrabold text-slate-900 text-sm">
+                    Delete Invoice #{invoiceNumber}?
+                  </h4>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                    This will permanently delete this invoice and all associated payments. Sold items will be returned to inventory stock, and serialized units will be reset to <strong className="text-emerald-700">"available"</strong>.
+                  </p>
+                </div>
+              </div>
+
+              {deleteError && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-xs font-semibold flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={() => {
+                    setIsConfirmingDelete(false);
+                    setDeleteError('');
+                  }}
+                  className="px-3.5 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={isDeleting}
+                  onClick={handleDeleteInvoice}
+                  className="px-4 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-colors flex items-center gap-1.5 shadow-md shadow-rose-600/20 cursor-pointer disabled:opacity-50"
+                >
+                  {isDeleting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deleting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Confirm Delete</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Invoice Printable Viewport */}
         <div className="p-6 overflow-y-auto flex-1 bg-slate-50 print:p-0 print:overflow-visible print:bg-white">

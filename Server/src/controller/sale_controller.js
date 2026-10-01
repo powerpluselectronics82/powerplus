@@ -1376,6 +1376,237 @@ const updateSaleCustomerDetails = async (req, res) => {
   }
 };
 
+const deleteSaleInvoice = async (req, res) => {
+  const session = await mongoose.startSession();
+  const companyId = toObjectId(req.user?.companyId);
+  const { saleId } = req.params;
+
+  if (!saleId || !mongoose.isValidObjectId(saleId)) {
+    return res.status(400).json({ success: false, message: "Valid saleId is required" });
+  }
+
+  const targetSaleId = toObjectId(saleId);
+
+  const executeDeleteLogic = async (sessionOpt) => {
+    let saleQuery = Sale.findOne({ _id: targetSaleId, companyId });
+    if (sessionOpt) saleQuery = saleQuery.session(sessionOpt);
+    const sale = await saleQuery;
+
+    if (!sale) {
+      throw new Error("Sale invoice not found");
+    }
+
+    // Role check: Branch Manager access control
+    if (req.user?.role === "BRANCH_MANAGER" && req.user.branchId) {
+      if (String(sale.branchId) !== String(req.user.branchId)) {
+        throw new Error("Access denied: You can only delete invoices from your own branch");
+      }
+    }
+
+    // 1. Restore product inventory and serial units
+    if (Array.isArray(sale.items) && sale.items.length > 0) {
+      for (const item of sale.items) {
+        const itemQty = Number(item.unit || 1);
+        const productId = item.productId;
+
+        // If item has serialNumber, restore InventoryUnit to "available"
+        if (item.serialNumber && String(item.serialNumber).trim()) {
+          const serialClean = String(item.serialNumber).trim();
+          const escapedSerial = serialClean.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+          const serialRegex = new RegExp(`^${escapedSerial}$`, "i");
+
+          let unitQuery = InventoryUnit.findOne({
+            companyId,
+            productId,
+            serialNumber: { $regex: serialRegex },
+          });
+          if (sessionOpt) unitQuery = unitQuery.session(sessionOpt);
+          let unit = await unitQuery;
+
+          if (!unit) {
+            let unitFallback = InventoryUnit.findOne({
+              companyId,
+              serialNumber: { $regex: serialRegex },
+            });
+            if (sessionOpt) unitFallback = unitFallback.session(sessionOpt);
+            unit = await unitFallback;
+          }
+
+          if (unit) {
+            unit.status = "available";
+            await unit.save(sessionOpt ? { session: sessionOpt } : {});
+          }
+        }
+
+        // Restore BranchInventory stock
+        if (productId) {
+          let branchInvQuery = BranchInventory.findOne({
+            companyId,
+            branchId: sale.branchId,
+            productId,
+          });
+          if (sessionOpt) branchInvQuery = branchInvQuery.session(sessionOpt);
+          let branchInv = await branchInvQuery;
+
+          if (branchInv) {
+            branchInv.stock = (Number(branchInv.stock) || 0) + itemQty;
+            await branchInv.save(sessionOpt ? { session: sessionOpt } : {});
+          } else {
+            const newBranchInv = new BranchInventory({
+              companyId,
+              branchId: sale.branchId,
+              productId,
+              barcode: item.barcode || "N/A",
+              purchasePrice: Number(item.purchasePrice || 0),
+              stock: itemQty,
+            });
+            await newBranchInv.save(sessionOpt ? { session: sessionOpt } : {});
+          }
+
+          // Restore Product.Stock
+          let prodQuery = Product.findById(productId);
+          if (sessionOpt) prodQuery = prodQuery.session(sessionOpt);
+          const product = await prodQuery;
+
+          if (product && typeof product.Stock === "number") {
+            product.Stock = (Number(product.Stock) || 0) + itemQty;
+            await product.save(sessionOpt ? { session: sessionOpt } : {});
+          }
+        }
+      }
+    }
+
+    // 2. Delete associated payments
+    const deletePayOpts = sessionOpt ? { session: sessionOpt } : {};
+    await Payment.deleteMany({ saleId: sale._id }, deletePayOpts);
+
+    // 3. Delete the Sale document
+    const deleteSaleOpts = sessionOpt ? { session: sessionOpt } : {};
+    await Sale.deleteOne({ _id: sale._id }, deleteSaleOpts);
+
+    return sale;
+  };
+
+  try {
+    session.startTransaction();
+    const deletedSale = await executeDeleteLogic(session);
+    await session.commitTransaction();
+
+    // Cache invalidation & Audit Log
+    await invalidateSaleCaches(companyId, deletedSale.branchId, deletedSale.cashierId);
+    await deleteCached(
+      `sales:company:${companyId}:all`,
+      `sales:company:${companyId}:branch:${deletedSale.branchId}`,
+      `branchInventory:${companyId}:${deletedSale.branchId}`,
+      `branchInventory:lowStock:v2:${companyId}:${deletedSale.branchId}`,
+      `branchInventory:valuation:${companyId}:${deletedSale.branchId}`,
+      `companyInventory:valuation:${companyId}`
+    );
+
+    try {
+      if (typeof createAuditLog === "function") {
+        await createAuditLog(req, {
+          companyId,
+          branchId: deletedSale.branchId,
+          userId: req.user?._id,
+          userName: req.user?.name || "Staff",
+          action: "DELETE_SALE_INVOICE",
+          resource: "Sale",
+          resourceId: deletedSale._id,
+          details: {
+            invoiceNumber: deletedSale.invoiceNumber,
+            grandTotal: deletedSale.grandTotal,
+            itemsCount: deletedSale.items?.length || 0,
+            restoredItems: deletedSale.items?.map((i) => ({
+              productName: i.productName,
+              serialNumber: i.serialNumber || null,
+              unit: i.unit,
+            })),
+          },
+        });
+      }
+    } catch (auditErr) {
+      console.warn("Audit log creation error:", auditErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: `Invoice #${deletedSale.invoiceNumber} deleted, inventory restored, and serial numbers marked available.`,
+      data: { invoiceNumber: deletedSale.invoiceNumber },
+    });
+  } catch (err) {
+    try {
+      await session.abortTransaction();
+    } catch (_) {}
+
+    // Fallback if standalone MongoDB does not support transactions
+    const isTxnError =
+      err.message &&
+      (err.message.includes("Transaction numbers") ||
+        err.message.includes("replica set") ||
+        err.message.includes("standalone") ||
+        err.message.includes("Transactions are not supported") ||
+        err.message.includes("TransientTransactionError") ||
+        err.message.includes("WriteConflict") ||
+        err.message.includes("session"));
+
+    if (isTxnError) {
+      try {
+        const deletedSale = await executeDeleteLogic(null);
+        await invalidateSaleCaches(companyId, deletedSale.branchId, deletedSale.cashierId);
+        await deleteCached(
+          `sales:company:${companyId}:all`,
+          `sales:company:${companyId}:branch:${deletedSale.branchId}`,
+          `branchInventory:${companyId}:${deletedSale.branchId}`,
+          `branchInventory:lowStock:v2:${companyId}:${deletedSale.branchId}`,
+          `branchInventory:valuation:${companyId}:${deletedSale.branchId}`,
+          `companyInventory:valuation:${companyId}`
+        );
+
+        try {
+          if (typeof createAuditLog === "function") {
+            await createAuditLog(req, {
+              companyId,
+              branchId: deletedSale.branchId,
+              userId: req.user?._id,
+              userName: req.user?.name || "Staff",
+              action: "DELETE_SALE_INVOICE",
+              resource: "Sale",
+              resourceId: deletedSale._id,
+              details: {
+                invoiceNumber: deletedSale.invoiceNumber,
+                grandTotal: deletedSale.grandTotal,
+                itemsCount: deletedSale.items?.length || 0,
+              },
+            });
+          }
+        } catch (auditErr) {
+          console.warn("Audit log creation error:", auditErr.message);
+        }
+
+        return res.status(200).json({
+          success: true,
+          message: `Invoice #${deletedSale.invoiceNumber} deleted, inventory restored, and serial numbers marked available.`,
+          data: { invoiceNumber: deletedSale.invoiceNumber },
+        });
+      } catch (fallbackErr) {
+        console.error("Delete sale fallback error:", fallbackErr.message);
+        return res.status(400).json({
+          success: false,
+          message: fallbackErr.message || "Failed to delete sale invoice",
+        });
+      }
+    }
+
+    console.error("Delete sale error:", err.message);
+    return res.status(400).json({
+      success: false,
+      message: err.message || "Failed to delete sale invoice",
+    });
+  } finally {
+    session.endSession();
+  }
+};
 
 module.exports = {
   createSale,
@@ -1389,6 +1620,7 @@ module.exports = {
   getCompanySummaryYear,
   getWarrantyStatus,
   updateSaleCustomerDetails,
+  deleteSaleInvoice,
 };
 
 
