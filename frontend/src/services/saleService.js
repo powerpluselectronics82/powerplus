@@ -66,7 +66,4 @@ export const saleService = {
     return await api.patch(`/updateCustomer/${saleId}`, customerData);
   },
 
-  updateSalePrices: async (saleId, priceData) => {
-    return await api.patch(`/updatePrices/${saleId}`, priceData);
-  },
 };
