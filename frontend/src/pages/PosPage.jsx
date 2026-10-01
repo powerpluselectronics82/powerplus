@@ -56,6 +56,8 @@ export const PosPage = () => {
     setCustomerAddress,
     customerGstin,
     setCustomerGstin,
+    invoiceNumber,
+    setInvoiceNumber,
     exchangeAmount,
     setExchangeAmount,
     paymentMethod,
@@ -402,6 +404,10 @@ export const PosPage = () => {
       setError('Branch not selected');
       return;
     }
+    if (!invoiceNumber || !invoiceNumber.trim()) {
+      setError('Invoice number is required');
+      return;
+    }
     setCheckoutLoading(true);
     setError('');
 
@@ -431,6 +437,7 @@ export const PosPage = () => {
       customerPhone: customerPhone || '9999999999',
       customerAddress: customerAddress || '',
       customerGstin: customerGstin ? String(customerGstin).trim().toUpperCase() : '',
+      invoiceNumber: String(invoiceNumber).trim(),
       exchangeAmount: totals.exchangeAmount || 0,
       totalDiscount: totals.exchangeAmount || totals.totalDiscount || 0,
       paidAmount: sanitizedPaid,
@@ -801,15 +808,38 @@ export const PosPage = () => {
                   className="input-tactile text-xs py-1.5 pl-3"
                 />
               </div>
-              <div className="relative">
-                <input
-                  type="text"
-                  maxLength={15}
-                  value={customerGstin}
-                  onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
-                  placeholder="Customer GSTIN (e.g. 22AAAAA0000A1Z5) - Optional"
-                  className="input-tactile text-xs py-1.5 pl-3 font-mono uppercase"
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <input
+                    type="text"
+                    maxLength={15}
+                    value={customerGstin}
+                    onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
+                    placeholder="Customer GSTIN - Optional"
+                    className="input-tactile text-xs py-1.5 pl-3 font-mono uppercase"
+                  />
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    required
+                    value={invoiceNumber}
+                    onChange={(e) => setInvoiceNumber(e.target.value)}
+                    placeholder="Invoice Number *"
+                    className="input-tactile text-xs py-1.5 pl-3 pr-7 font-mono uppercase"
+                    title="Enter invoice number"
+                  />
+                  {invoiceNumber && (
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceNumber('')}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded"
+                      title="Clear invoice number"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 

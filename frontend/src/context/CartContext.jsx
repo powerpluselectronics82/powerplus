@@ -8,6 +8,7 @@ export const CartProvider = ({ children }) => {
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [customerGstin, setCustomerGstin] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
   const [exchangeAmount, setExchangeAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('CASH');
   const [completedSale, setCompletedSale] = useState(null);
@@ -188,6 +189,7 @@ export const CartProvider = ({ children }) => {
     setCustomerPhone('');
     setCustomerAddress('');
     setCustomerGstin('');
+    setInvoiceNumber('');
     setExchangeAmount('');
     setPaymentMethod('CASH');
   };
@@ -284,6 +286,8 @@ export const CartProvider = ({ children }) => {
         setCustomerAddress,
         customerGstin,
         setCustomerGstin,
+        invoiceNumber,
+        setInvoiceNumber,
         exchangeAmount,
         setExchangeAmount,
         paymentMethod,

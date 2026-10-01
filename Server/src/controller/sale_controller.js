@@ -6,7 +6,6 @@ const Product = require("../model/product");
 const Branch = require("../model/branch");
 const BranchInventory = require("../model/BranchInventory");
 const InventoryUnit = require("../model/inventryUnit");
-const Counter = require("../model/counter");
 const Payment = require("../model/payment");
 const { createAuditLog } = require("../utils/auditLogger");
 
@@ -116,6 +115,7 @@ const createSale = async (req, res) => {
       customerPhone,
       customerAddress,
       customerGstin,
+      invoiceNumber: manualInvoiceNumber,
       tollFreeNumber: topTollFree,
       items,
       paymentMethod,
@@ -430,23 +430,20 @@ const createSale = async (req, res) => {
       };
     }
 
-    const today = new Date();
-    const date =
-      today.getFullYear().toString() +
-      String(today.getMonth() + 1).padStart(2, "0") +
-      String(today.getDate()).padStart(2, "0");
+    const invoiceNumber = (manualInvoiceNumber || req.body.invoiceNumber)
+      ? String(manualInvoiceNumber || req.body.invoiceNumber).trim()
+      : "";
 
-    const counterOpts = { new: true, returnDocument: "after", upsert: true };
-    if (sessionOpt) counterOpts.session = sessionOpt;
+    if (!invoiceNumber) {
+      throw new Error("Invoice number is required");
+    }
 
-    const counter = await Counter.findOneAndUpdate(
-      { companyId, branchId, date },
-      { $inc: { sequence: 1 } },
-      counterOpts
-    );
-
-    const invoiceSeq = (counter && counter.sequence) ? counter.sequence : (Math.floor(Math.random() * 8999) + 1000);
-    const invoiceNumber = `${branch.code || 'INV'}-${date}-${String(invoiceSeq).padStart(4, "0")}`;
+    let existingSaleQuery = Sale.findOne({ invoiceNumber });
+    if (sessionOpt) existingSaleQuery = existingSaleQuery.session(sessionOpt);
+    const existingSale = await existingSaleQuery;
+    if (existingSale) {
+      throw new Error(`Invoice number "${invoiceNumber}" already exists. Please enter a unique invoice number.`);
+    }
 
     // Calculate paidAmount and dueAmount
     let finalPaidAmount = grandTotal;
@@ -702,17 +699,25 @@ const createSale = async (req, res) => {
         });
       } catch (fallbackErr) {
         console.error("Create sale fallback error:", fallbackErr.message);
+        let errorMsg = fallbackErr.message || "Failed to process sale";
+        if (fallbackErr.code === 11000 || fallbackErr.message?.includes("E11000") || fallbackErr.message?.includes("duplicate key")) {
+          errorMsg = "Invoice number already exists. Please choose a unique invoice number.";
+        }
         return res.status(400).json({
           success: false,
-          message: fallbackErr.message || "Failed to process sale",
+          message: errorMsg,
         });
       }
     }
 
     console.error("Create sale error:", err.message);
+    let errorMsg = err.message || "Failed to process sale";
+    if (err.code === 11000 || err.message?.includes("E11000") || err.message?.includes("duplicate key")) {
+      errorMsg = "Invoice number already exists. Please choose a unique invoice number.";
+    }
     return res.status(400).json({
       success: false,
-      message: err.message || "Failed to process sale",
+      message: errorMsg,
     });
   } finally {
     session.endSession();
