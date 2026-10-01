@@ -28,6 +28,13 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   const [isSavingCustomer, setIsSavingCustomer] = useState(false);
   const [customerEditError, setCustomerEditError] = useState('');
 
+  // Selling Price editing state
+  const [isEditingPrices, setIsEditingPrices] = useState(false);
+  const [priceFormData, setPriceFormData] = useState({});
+  const [isSavingPrices, setIsSavingPrices] = useState(false);
+  const [priceEditError, setPriceEditError] = useState('');
+  const [priceSuccessMsg, setPriceSuccessMsg] = useState('');
+
   useEffect(() => {
     if (sale) {
       setActiveSale(sale);
@@ -235,13 +242,162 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
       : (company?.address || branch?.address || 'No. 38/ Agora Plaza, Dak Bangala Road, Bihiya Bihar 802152, India');
 
   const items = Array.isArray(activeSale.items || sale.items) && (activeSale.items || sale.items).length > 0 ? (activeSale.items || sale.items) : [];
-  const subtotal = Number(activeSale.subtotal ?? sale.subtotal ?? activeSale.grandTotal ?? sale.grandTotal ?? 0);
-  const cgstTotal = Number(activeSale.cgstTotal ?? sale.cgstTotal ?? 0);
-  const sgstTotal = Number(activeSale.sgstTotal ?? sale.sgstTotal ?? 0);
+
+  const handleStartEditPrices = () => {
+    const initial = {};
+    items.forEach((item, index) => {
+      const key = item._id || String(index);
+      initial[key] = item.sellingPrice ?? 0;
+    });
+    setPriceFormData(initial);
+    setPriceEditError('');
+    setPriceSuccessMsg('');
+    setIsEditingPrices(true);
+  };
+
+  const handlePriceChange = (key, val) => {
+    setPriceFormData((prev) => ({
+      ...prev,
+      [key]: val,
+    }));
+  };
+
+  const handleSavePrices = async (e) => {
+    if (e) e.preventDefault();
+    const resolvedSaleId = activeSale?._id || activeSale?.id || sale?._id || sale?.id;
+    if (!resolvedSaleId) {
+      setPriceEditError('Sale ID is missing');
+      return;
+    }
+
+    setIsSavingPrices(true);
+    setPriceEditError('');
+    setPriceSuccessMsg('');
+
+    try {
+      const payloadItems = items.map((item, index) => {
+        const key = item._id || String(index);
+        const parsedPrice = Math.max(0, Number(priceFormData[key] ?? item.sellingPrice ?? 0));
+        return {
+          _id: item._id,
+          index,
+          barcode: item.barcode,
+          sellingPrice: parsedPrice,
+        };
+      });
+
+      const res = await saleService.updateSalePrices(resolvedSaleId, { items: payloadItems });
+      const isSuccess = Boolean(res?.success || res?.data);
+      const updatedData = res?.data || res;
+
+      if (isSuccess && updatedData) {
+        setActiveSale(updatedData);
+        setIsEditingPrices(false);
+        setPriceSuccessMsg('Selling prices updated successfully');
+        setTimeout(() => setPriceSuccessMsg(''), 4000);
+        if (typeof onPaymentUpdated === 'function') {
+          onPaymentUpdated();
+        }
+      } else {
+        setPriceEditError(res?.message || 'Failed to update selling prices');
+      }
+    } catch (err) {
+      console.error('Error updating selling prices:', err);
+      setPriceEditError(err.response?.data?.message || err.message || 'Error updating selling prices');
+    } finally {
+      setIsSavingPrices(false);
+    }
+  };
+
+  const displayItems = useMemo(() => {
+    if (!isEditingPrices) return items;
+    return items.map((item, index) => {
+      const key = item._id || String(index);
+      const val = priceFormData[key];
+      const effectivePrice = val !== undefined && val !== '' && !isNaN(Number(val))
+        ? Math.max(0, Number(val))
+        : Number(item.sellingPrice || 0);
+
+      const qty = Number(item.unit || item.quantity || 1);
+      const base = effectivePrice * qty;
+
+      const cgstPct = item.cgstRate !== undefined && item.cgstRate !== null && item.cgstRate !== ''
+        ? Number(item.cgstRate)
+        : (Number(item.cgstAmount || 0) > 0 && Number(item.sellingPrice || 0) > 0
+          ? Number(((Number(item.cgstAmount) / (Number(item.sellingPrice) * qty)) * 100).toFixed(1))
+          : 0);
+
+      const sgstPct = item.sgstRate !== undefined && item.sgstRate !== null && item.sgstRate !== ''
+        ? Number(item.sgstRate)
+        : (Number(item.sgstAmount || 0) > 0 && Number(item.sellingPrice || 0) > 0
+          ? Number(((Number(item.sgstAmount) / (Number(item.sellingPrice) * qty)) * 100).toFixed(1))
+          : 0);
+
+      const cgstAmt = Number((base * (cgstPct / 100)).toFixed(2));
+      const sgstAmt = Number((base * (sgstPct / 100)).toFixed(2));
+      const taxableAmount = cgstAmt + sgstAmt;
+      const totalAmount = base + taxableAmount;
+
+      return {
+        ...item,
+        sellingPrice: effectivePrice,
+        cgstAmount: cgstAmt,
+        sgstAmount: sgstAmt,
+        taxableAmount,
+        totalAmount,
+      };
+    });
+  }, [items, isEditingPrices, priceFormData]);
+
+  const rawSubtotal = Number(activeSale.subtotal ?? sale.subtotal ?? activeSale.grandTotal ?? sale.grandTotal ?? 0);
+  const rawCgstTotal = Number(activeSale.cgstTotal ?? sale.cgstTotal ?? 0);
+  const rawSgstTotal = Number(activeSale.sgstTotal ?? sale.sgstTotal ?? 0);
   const totalDiscount = Number(activeSale.totalDiscount ?? sale.totalDiscount ?? activeSale.exchangeAmount ?? sale.exchangeAmount ?? 0);
-  const grandTotal = Number(activeSale.grandTotal ?? sale.grandTotal ?? Math.max(0, subtotal + cgstTotal + sgstTotal - totalDiscount));
-  const paidAmount = Number(activeSale.paidAmount ?? (activeSale.paymentStatus === 'PAID' ? grandTotal : 0));
-  const dueAmount = Number(activeSale.dueAmount ?? (activeSale.paymentStatus === 'PAID' ? 0 : grandTotal));
+  const rawGrandTotal = Number(activeSale.grandTotal ?? sale.grandTotal ?? Math.max(0, rawSubtotal + rawCgstTotal + rawSgstTotal - totalDiscount));
+  const rawPaidAmount = Number(activeSale.paidAmount ?? (activeSale.paymentStatus === 'PAID' ? rawGrandTotal : 0));
+  const rawDueAmount = Number(activeSale.dueAmount ?? (activeSale.paymentStatus === 'PAID' ? 0 : rawGrandTotal));
+
+  const calculatedTotals = useMemo(() => {
+    if (!isEditingPrices) {
+      return {
+        subtotal: rawSubtotal,
+        cgstTotal: rawCgstTotal,
+        sgstTotal: rawSgstTotal,
+        grandTotal: rawGrandTotal,
+        paidAmount: rawPaidAmount,
+        dueAmount: rawDueAmount,
+      };
+    }
+    let pSub = 0;
+    let pCgst = 0;
+    let pSgst = 0;
+    displayItems.forEach((it) => {
+      const qty = Number(it.unit || 1);
+      pSub += (Number(it.sellingPrice) || 0) * qty;
+      pCgst += (Number(it.cgstAmount) || 0);
+      pSgst += (Number(it.sgstAmount) || 0);
+    });
+    pSub = Number(pSub.toFixed(2));
+    pCgst = Number(pCgst.toFixed(2));
+    pSgst = Number(pSgst.toFixed(2));
+    const pGrand = Math.max(0, Number((pSub + pCgst + pSgst - totalDiscount).toFixed(2)));
+    const pDue = Math.max(0, Number((pGrand - rawPaidAmount).toFixed(2)));
+    return {
+      subtotal: pSub,
+      cgstTotal: pCgst,
+      sgstTotal: pSgst,
+      grandTotal: pGrand,
+      paidAmount: rawPaidAmount,
+      dueAmount: pDue,
+    };
+  }, [isEditingPrices, displayItems, rawSubtotal, rawCgstTotal, rawSgstTotal, rawGrandTotal, totalDiscount, rawPaidAmount, rawDueAmount]);
+
+  const subtotal = calculatedTotals.subtotal;
+  const cgstTotal = calculatedTotals.cgstTotal;
+  const sgstTotal = calculatedTotals.sgstTotal;
+  const grandTotal = calculatedTotals.grandTotal;
+  const paidAmount = calculatedTotals.paidAmount;
+  const dueAmount = calculatedTotals.dueAmount;
   const paymentStatus = activeSale.paymentStatus || (dueAmount <= 0 ? 'PAID' : (paidAmount > 0 ? 'PARTIAL' : 'UNPAID'));
   const totalInWords = numberToWordsInINR(grandTotal);
 
@@ -574,12 +730,72 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
             </div>
 
             {/* Payment Remark Subject Banner */}
-            <div className="border-x border-b border-slate-800 p-2.5 bg-slate-100/70 text-[11px] font-semibold">
-              <span className="font-bold text-slate-700">Subject : </span>
-              <span className="font-mono text-slate-900">
-                METHOD: {formattedMethod} — STATUS: {paymentStatus} (PAID: ₹{paidAmount.toFixed(2)}{dueAmount > 0 ? `, DUE: ₹${dueAmount.toFixed(2)}` : ''}) — INVOICE #{invoiceNumber}
-              </span>
+            <div className="border-x border-b border-slate-800 p-2.5 bg-slate-100/70 text-[11px] font-semibold flex items-center justify-between flex-wrap gap-2">
+              <div className="flex-1 min-w-[240px]">
+                <span className="font-bold text-slate-700">Subject : </span>
+                <span className="font-mono text-slate-900">
+                  METHOD: {formattedMethod} — STATUS: {paymentStatus} (PAID: ₹{paidAmount.toFixed(2)}{dueAmount > 0 ? `, DUE: ₹${dueAmount.toFixed(2)}` : ''}) — INVOICE #{invoiceNumber}
+                </span>
+              </div>
+              <div className="print:hidden flex items-center gap-1.5 shrink-0">
+                {!isEditingPrices ? (
+                  <button
+                    type="button"
+                    onClick={handleStartEditPrices}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded border border-indigo-200 transition-colors cursor-pointer shadow-2xs"
+                    title="Edit selling price (Rate) for items in this tax invoice"
+                  >
+                    <Edit2 className="w-3 h-3" />
+                    <span>Edit Rate / Prices</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      disabled={isSavingPrices}
+                      onClick={() => {
+                        setIsEditingPrices(false);
+                        setPriceEditError('');
+                      }}
+                      className="px-2.5 py-1 text-[10px] font-bold text-slate-600 bg-white border border-slate-300 rounded hover:bg-slate-50 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSavingPrices}
+                      onClick={handleSavePrices}
+                      className="inline-flex items-center gap-1 px-3 py-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      {isSavingPrices ? (
+                        <>
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3 h-3" />
+                          <span>Save Prices</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {priceEditError && (
+              <div className="border-x border-b border-red-300 p-2 bg-red-50 text-red-700 text-xs flex items-center gap-1.5 font-sans print:hidden">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{priceEditError}</span>
+              </div>
+            )}
+            {priceSuccessMsg && (
+              <div className="border-x border-b border-emerald-300 p-2 bg-emerald-50 text-emerald-800 text-xs flex items-center gap-1.5 font-sans print:hidden">
+                <CheckCircle className="w-4 h-4 shrink-0 text-emerald-600" />
+                <span>{priceSuccessMsg}</span>
+              </div>
+            )}
 
             {/* Line Items Table */}
             <table className="w-full border-x border-b border-slate-800 text-left text-[11px] border-collapse">
@@ -606,14 +822,14 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-300">
-                {items.length === 0 ? (
+                {displayItems.length === 0 ? (
                   <tr>
                     <td colSpan={12} className="p-4 text-center text-slate-400 italic">
                       No line items recorded.
                     </td>
                   </tr>
                 ) : (
-                  items.map((item, index) => {
+                  displayItems.map((item, index) => {
                     if (!item) return null;
                     const qty = Number(item.unit || item.quantity || 1);
                     const rawSelling = Number(item.sellingPrice || item.mrp || 0);
@@ -664,7 +880,25 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                           {qty} PCS
                         </td>
                         <td className="p-2 border-r border-slate-800 text-right font-mono">
-                          {sellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {isEditingPrices ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-[10px] text-slate-400 font-bold print:hidden">₹</span>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={priceFormData[item._id || String(index)] ?? item.sellingPrice ?? ''}
+                                onChange={(e) => handlePriceChange(item._id || String(index), e.target.value)}
+                                className="w-20 px-1 py-0.5 text-right font-mono font-bold text-xs bg-white border border-indigo-400 rounded focus:ring-1 focus:ring-indigo-500 focus:outline-none print:hidden"
+                                placeholder="0.00"
+                              />
+                              <span className="hidden print:inline">
+                                {sellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ) : (
+                            sellingPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })
+                          )}
                         </td>
                         <td className="p-1 border-r border-slate-800 text-center font-mono">
                           {cgstPct > 0 ? `${cgstPct}%` : '0%'}

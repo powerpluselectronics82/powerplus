@@ -1376,6 +1376,191 @@ const updateSaleCustomerDetails = async (req, res) => {
   }
 };
 
+const updateSaleItemPrices = async (req, res) => {
+  try {
+    const { saleId } = req.params;
+    const { items: updatedItemPrices } = req.body;
+    const companyId = req.user?.companyId;
+
+    if (!saleId) {
+      return res.status(400).json({ success: false, message: "saleId is required" });
+    }
+
+    if (!Array.isArray(updatedItemPrices) || updatedItemPrices.length === 0) {
+      return res.status(400).json({ success: false, message: "Items array is required" });
+    }
+
+    const targetSaleId = toObjectId(saleId);
+    const targetCompanyId = toObjectId(companyId);
+
+    const sale = await Sale.findOne({ _id: targetSaleId, companyId: targetCompanyId });
+    if (!sale) {
+      return res.status(404).json({ success: false, message: "Sale not found" });
+    }
+
+    // Role check: Branch Manager
+    if (req.user?.role === "BRANCH_MANAGER" && req.user.branchId) {
+      if (String(sale.branchId) !== String(req.user.branchId)) {
+        return res.status(403).json({ success: false, message: "Access denied to sale from another branch" });
+      }
+    }
+
+    for (const updateItem of updatedItemPrices) {
+      let item = null;
+      if (updateItem._id) {
+        item = sale.items.id(updateItem._id);
+      }
+      if (!item && updateItem.itemId) {
+        item = sale.items.id(updateItem.itemId);
+      }
+      if (!item && updateItem.barcode) {
+        item = sale.items.find(i => String(i.barcode) === String(updateItem.barcode));
+      }
+      if (!item && typeof updateItem.index === "number" && sale.items[updateItem.index]) {
+        item = sale.items[updateItem.index];
+      }
+
+      if (item) {
+        const rawNewPrice = Number(updateItem.sellingPrice ?? updateItem.price);
+        if (isNaN(rawNewPrice) || rawNewPrice < 0) {
+          continue;
+        }
+
+        const newSellingPrice = Math.max(0, rawNewPrice);
+        const qty = Number(item.unit || 1);
+        const baseAmount = newSellingPrice * qty;
+
+        let cgstRate = 0;
+        let sgstRate = 0;
+        let igstRate = 0;
+
+        if (item.productId && mongoose.isValidObjectId(item.productId)) {
+          const product = await Product.findById(item.productId).lean();
+          if (product) {
+            cgstRate = Number(product.cgstRate || 0);
+            sgstRate = Number(product.sgstRate || 0);
+            igstRate = Number(product.igstRate || 0);
+          }
+        }
+
+        if (cgstRate === 0 && sgstRate === 0 && item.sellingPrice > 0) {
+          const oldBase = Number(item.sellingPrice) * qty;
+          if (oldBase > 0) {
+            cgstRate = (Number(item.cgstAmount || 0) / oldBase) * 100;
+            sgstRate = (Number(item.sgstAmount || 0) / oldBase) * 100;
+            igstRate = (Number(item.igstAmount || 0) / oldBase) * 100;
+          }
+        }
+
+        const cgstAmount = Number((baseAmount * (cgstRate / 100)).toFixed(2));
+        const sgstAmount = Number((baseAmount * (sgstRate / 100)).toFixed(2));
+        const igstAmount = Number((baseAmount * (igstRate / 100)).toFixed(2));
+        const taxableAmount = Number((cgstAmount + sgstAmount).toFixed(2));
+        const totalAmount = Number((baseAmount + taxableAmount).toFixed(2));
+
+        item.sellingPrice = newSellingPrice;
+        item.cgstAmount = cgstAmount;
+        item.sgstAmount = sgstAmount;
+        item.igstAmount = igstAmount;
+        item.taxableAmount = taxableAmount;
+        item.totalAmount = totalAmount;
+      }
+    }
+
+    let newSubtotal = 0;
+    let newTaxableValue = 0;
+    let newCgstTotal = 0;
+    let newSgstTotal = 0;
+    let newIgstTotal = 0;
+
+    for (const it of sale.items) {
+      const itBase = (Number(it.sellingPrice) || 0) * (Number(it.unit) || 1);
+      newSubtotal += itBase;
+      newTaxableValue += (Number(it.taxableAmount) || 0);
+      newCgstTotal += (Number(it.cgstAmount) || 0);
+      newSgstTotal += (Number(it.sgstAmount) || 0);
+      newIgstTotal += (Number(it.igstAmount) || 0);
+    }
+
+    newSubtotal = Number(newSubtotal.toFixed(2));
+    newTaxableValue = Number(newTaxableValue.toFixed(2));
+    newCgstTotal = Number(newCgstTotal.toFixed(2));
+    newSgstTotal = Number(newSgstTotal.toFixed(2));
+    newIgstTotal = Number(newIgstTotal.toFixed(2));
+
+    const totalDiscount = Number(sale.totalDiscount || sale.exchangeAmount || 0);
+    const newGrandTotal = Math.max(0, Number((newSubtotal + newTaxableValue - totalDiscount).toFixed(2)));
+
+    sale.subtotal = newSubtotal;
+    sale.taxableValue = newTaxableValue;
+    sale.cgstTotal = newCgstTotal;
+    sale.sgstTotal = newSgstTotal;
+    sale.igstTotal = newIgstTotal;
+    sale.grandTotal = newGrandTotal;
+
+    const payments = await Payment.find({ saleId: sale._id });
+    let actualPaid = 0;
+    if (payments && payments.length > 0) {
+      actualPaid = payments.reduce((acc, p) => acc + (Number(p.amountPaid) || 0), 0);
+    } else {
+      actualPaid = Number(sale.paidAmount || 0);
+    }
+
+    if ((!payments || payments.length === 0) && sale.paymentStatus === "PAID" && sale.dueAmount === 0) {
+      actualPaid = newGrandTotal;
+    }
+
+    actualPaid = Number(actualPaid.toFixed(2));
+    sale.paidAmount = actualPaid;
+    const newDue = Math.max(0, Number((newGrandTotal - actualPaid).toFixed(2)));
+    sale.dueAmount = newDue;
+    sale.paymentStatus = newDue <= 0 ? "PAID" : (actualPaid > 0 ? "PARTIAL" : "UNPAID");
+
+    await sale.save();
+
+    await invalidateSaleCaches(companyId, sale.branchId, sale.cashierId);
+    await deleteCached(
+      `sales:company:${companyId}:all`,
+      `sales:company:${companyId}:branch:${sale.branchId}`
+    );
+
+    try {
+      if (typeof createAuditLog === "function") {
+        await createAuditLog(req, {
+          companyId,
+          branchId: sale.branchId,
+          userId: req.user?._id,
+          userName: req.user?.name || "Staff",
+          action: "UPDATE_SALE_PRICES",
+          resource: "Sale",
+          resourceId: sale._id,
+          details: {
+            saleId: sale._id,
+            invoiceNumber: sale.invoiceNumber,
+            newGrandTotal,
+            paidAmount: sale.paidAmount,
+            dueAmount: sale.dueAmount,
+          },
+        });
+      }
+    } catch (auditErr) {
+      console.warn("Audit log creation error:", auditErr.message);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Sale selling prices updated successfully",
+      data: sale,
+    });
+  } catch (err) {
+    console.error("Update sale prices error:", err);
+    return res.status(500).json({
+      success: false,
+      message: err.message || "Failed to update sale prices",
+    });
+  }
+};
+
 module.exports = {
   createSale,
   getAllSales,
@@ -1388,6 +1573,7 @@ module.exports = {
   getCompanySummaryYear,
   getWarrantyStatus,
   updateSaleCustomerDetails,
+  updateSaleItemPrices,
 };
 
 
