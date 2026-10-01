@@ -531,7 +531,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
 
                 <div className="space-y-1 text-[11px] pt-4 font-mono">
                   <div className="flex justify-between">
-                    <span className="font-bold text-slate-600">#</span>
+                    <span className="font-bold text-slate-600">Invoice No</span>
                     <span className="font-bold text-indigo-900">: {invoiceNumber}</span>
                   </div>
                   <div className="flex justify-between">
@@ -763,13 +763,26 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                           {item.description && (
                             <div className="text-[10px] text-slate-500 line-clamp-1">{item.description}</div>
                           )}
-                          {item.serialNumber && (
-                            <div className="text-[10px] text-indigo-700 font-mono font-semibold">
-                              S/N: {item.serialNumber}
-                            </div>
-                          )}
+                          {(() => {
+                            const itemModel = item.modelNumber || item.productId?.modelNumber || item.product?.modelNumber || item.productId?.specifications?.modelNumber || '';
+                            if (!itemModel && !item.serialNumber) return null;
+                            return (
+                              <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                                {itemModel && (
+                                  <span className="inline-block text-[10px] font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-300">
+                                    Model: {itemModel}
+                                  </span>
+                                )}
+                                {item.serialNumber && (
+                                  <span className="inline-block text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                    S/N: {item.serialNumber}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                           {item.warranty && (
-                            <div className="text-[10px] text-purple-700 font-mono font-medium">
+                            <div className="text-[10px] text-purple-700 font-mono font-medium mt-0.5">
                               Warranty: {item.warranty}
                             </div>
                           )}

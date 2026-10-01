@@ -1537,7 +1537,7 @@ const deleteSaleInvoice = async (req, res) => {
   } catch (err) {
     try {
       await session.abortTransaction();
-    } catch (_) {}
+    } catch (_) { }
 
     // Fallback if standalone MongoDB does not support transactions
     const isTxnError =

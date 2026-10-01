@@ -127,14 +127,25 @@ export const ReceiptModal = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {completedSale.items?.map((item, idx) => (
-                <tr key={idx}>
-                  <td className="py-1.5 font-bold text-slate-800">{item.productName}</td>
-                  <td className="py-1.5 text-center font-mono">{item.unit}</td>
-                  <td className="py-1.5 text-right font-mono">₹{item.sellingPrice}</td>
-                  <td className="py-1.5 text-right font-mono font-bold">₹{item.totalAmount?.toFixed(2)}</td>
-                </tr>
-              ))}
+              {completedSale.items?.map((item, idx) => {
+                const itemModel = item.modelNumber || item.productId?.modelNumber || '';
+                return (
+                  <tr key={idx}>
+                    <td className="py-1.5 font-bold text-slate-800">
+                      <div>{item.productName}</div>
+                      {(itemModel || item.serialNumber) && (
+                        <div className="text-[10px] font-mono text-slate-500 font-normal space-x-1.5 mt-0.5">
+                          {itemModel && <span>Mod: {itemModel}</span>}
+                          {item.serialNumber && <span>S/N: {item.serialNumber}</span>}
+                        </div>
+                      )}
+                    </td>
+                    <td className="py-1.5 text-center font-mono">{item.unit}</td>
+                    <td className="py-1.5 text-right font-mono">₹{item.sellingPrice}</td>
+                    <td className="py-1.5 text-right font-mono font-bold">₹{item.totalAmount?.toFixed(2)}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
 

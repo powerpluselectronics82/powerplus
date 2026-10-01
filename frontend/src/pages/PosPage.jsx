@@ -452,6 +452,7 @@ export const PosPage = () => {
       items: items.map((item) => ({
         productId: item.product._id,
         barcode: item.product.barcode,
+        modelNumber: item.product.modelNumber || item.product.specifications?.modelNumber || item.modelNumber || '',
         unit: item.unit,
         purchasePrice: item.product.purchasePrice || 0,
         sellingPrice: getItemPrice(item.product, item),
@@ -870,10 +871,19 @@ export const PosPage = () => {
                         <h5 className="font-bold text-slate-900 line-clamp-1">
                           {product.name}
                         </h5>
-                        {serialNumber && (
-                          <span className="inline-block text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded mt-0.5">
-                            S/N: {serialNumber}
-                          </span>
+                        {((product.modelNumber || product.specifications?.modelNumber) || serialNumber) && (
+                          <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
+                            {(product.modelNumber || product.specifications?.modelNumber) && (
+                              <span className="inline-block text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                Model: {product.modelNumber || product.specifications?.modelNumber}
+                              </span>
+                            )}
+                            {serialNumber && (
+                              <span className="inline-block text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">
+                                S/N: {serialNumber}
+                              </span>
+                            )}
+                          </div>
                         )}
                         <div className="flex flex-wrap items-center gap-2 mt-1">
                           <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-1.5 py-0.5 shadow-2xs">
