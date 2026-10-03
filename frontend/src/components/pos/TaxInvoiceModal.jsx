@@ -273,12 +273,11 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
     return 'BR-001';
   }, [targetBranch, branch, activeSale, sale, contextCurrentBranch, contextBranches, reduxBranches]);
   const companyName = company?.name || 'POWER PLUS ELECTRONICS';
-  const companyGstin = company?.gstin || targetBranch?.gstin || branch?.gstin || '10AAGCK1649C1Z4';
-  const companyId = company?.companyId || 'U74110KA2016PTC093403';
+  const companyGstin = company?.gstin || targetBranch?.gstin || branch?.gstin;
   const companyAddress =
     targetBranch?.address && typeof targetBranch.address === 'string' && targetBranch.address.trim()
       ? targetBranch.address
-      : (company?.address || branch?.address || 'No. 38/ Agora Plaza, Dak Bangala Road, Bihiya Bihar 802152, India');
+      : (company?.address || branch?.address);
 
   const items = Array.isArray(activeSale.items || sale.items) && (activeSale.items || sale.items).length > 0 ? (activeSale.items || sale.items) : [];
   const subtotal = Number(activeSale.subtotal ?? sale.subtotal ?? activeSale.grandTotal ?? sale.grandTotal ?? 0);
@@ -344,7 +343,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
         setActiveSale((prev) => ({
           ...prev,
           ...(typeof updatedData === 'object' ? updatedData : {}),
-          customerName: payload.customerName || prev?.customerName || 'Walk-in Customer',
+          customerName: payload.customerName || prev?.customerName ,
           customerPhone: payload.customerPhone !== undefined ? payload.customerPhone : prev?.customerPhone,
           customerAddress: payload.customerAddress !== undefined ? payload.customerAddress : prev?.customerAddress,
           customerGstin: payload.customerGstin !== undefined ? payload.customerGstin : prev?.customerGstin,
@@ -550,7 +549,6 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
                     {companyName}
                   </h2>
                   <p className="font-semibold text-slate-700">Branch Code - {branchCode}</p>
-                  <p className="text-slate-600">Company ID : {companyId}</p>
                   <p className="text-slate-600 leading-tight">{companyAddress}</p>
                   <p className="font-semibold text-slate-800 pt-0.5">GSTIN: {companyGstin}</p>
                   <p className="text-slate-600">Contact No : {contactNo}</p>
