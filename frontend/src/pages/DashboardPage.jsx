@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { productService } from '../services/productService';
@@ -81,6 +81,102 @@ export const DashboardPage = () => {
     setIsInvoiceOpen(true);
   };
 
+  const monthSalesList = useMemo(() => {
+    return Array.isArray(monthlySales?.sales) ? monthlySales.sales : [];
+  }, [monthlySales?.sales]);
+
+  const filteredMonthSales = useMemo(() => {
+    const q = (monthlySearch || '').toLowerCase().trim();
+    if (!q) return monthSalesList;
+    return monthSalesList.filter((s) => {
+      if (!s) return false;
+      const inv = String(s.invoiceNumber || '').toLowerCase();
+      const cust = String(s.customerName || '').toLowerCase();
+      const phone = String(s.customerPhone || '').toLowerCase();
+      const cashier = String(s.cashierName || '').toLowerCase();
+      const method = String(s.paymentMethod || '').toLowerCase();
+      return (
+        inv.includes(q) ||
+        cust.includes(q) ||
+        phone.includes(q) ||
+        cashier.includes(q) ||
+        method.includes(q)
+      );
+    });
+  }, [monthSalesList, monthlySearch]);
+
+  const salesMetrics = useMemo(() => {
+    let totalSales = 0;
+    let totalCash = 0;
+    let totalDigital = 0;
+    let totalDue = 0;
+    let cashCount = 0;
+    let digitalCount = 0;
+
+    filteredMonthSales.forEach((s) => {
+      if (!s) return;
+      const grandTotal = Number(s.grandTotal || s.subtotal || 0);
+      totalSales += grandTotal;
+
+      const method = String(s.paymentMethod || 'CASH').trim().toUpperCase();
+      const status = String(s.paymentStatus || '').trim().toUpperCase();
+
+      let paid = 0;
+      if (s.paidAmount !== undefined && s.paidAmount !== null && !isNaN(Number(s.paidAmount))) {
+        paid = Number(s.paidAmount);
+      } else if (status === 'UNPAID') {
+        paid = 0;
+      } else {
+        paid = grandTotal;
+      }
+
+      const due = s.dueAmount !== undefined && s.dueAmount !== null && !isNaN(Number(s.dueAmount))
+        ? Number(s.dueAmount)
+        : Math.max(0, grandTotal - paid);
+      totalDue += due;
+
+      let cashAmt = 0;
+      let digitalAmt = 0;
+
+      if (method === 'CASH') {
+        cashAmt = paid;
+      } else if (method === 'SPLIT') {
+        const splitCash = Number(s.splitDetails?.cashAmount || 0);
+        const splitCard = Number(s.splitDetails?.cardAmount || 0);
+        const splitUpi = Number(s.splitDetails?.upiAmount || 0);
+        if (splitCash > 0 || splitCard > 0 || splitUpi > 0) {
+          cashAmt = splitCash;
+          digitalAmt = splitCard + splitUpi;
+        } else {
+          cashAmt = paid / 2;
+          digitalAmt = paid / 2;
+        }
+      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR'].includes(method)) {
+        digitalAmt = paid;
+      } else if (method.includes('CASH')) {
+        cashAmt = paid;
+      } else {
+        digitalAmt = paid;
+      }
+
+      totalCash += cashAmt;
+      totalDigital += digitalAmt;
+
+      if (cashAmt > 0) cashCount += 1;
+      if (digitalAmt > 0) digitalCount += 1;
+    });
+
+    return {
+      totalSales,
+      totalCash,
+      totalDigital,
+      totalDue,
+      cashCount,
+      digitalCount,
+      invoicesCount: filteredMonthSales.length,
+    };
+  }, [filteredMonthSales]);
+
   const handleDownloadExcel = () => {
     const listToExport = filteredMonthSales;
     if (!listToExport || listToExport.length === 0) {
@@ -93,7 +189,7 @@ export const DashboardPage = () => {
     let csvContent = '\uFEFF'; // UTF-8 BOM for Excel compatibility
     csvContent += `Monthly Sales Ledger Report - ${selectedMonth}\n`;
     csvContent += `Branch: ${branchName}, Generated On: ${new Date().toLocaleString('en-IN')}\n`;
-    csvContent += `Total Sales Amount: ₹${Number(monthlySales?.totalSalesAmount || 0).toFixed(2)}, Total Invoices: ${listToExport.length}\n\n`;
+    csvContent += `Total Sales: INR ${salesMetrics.totalSales.toFixed(2)}, Cash Collected: INR ${salesMetrics.totalCash.toFixed(2)}, Digital (UPI/Card): INR ${salesMetrics.totalDigital.toFixed(2)}, Total Invoices: ${listToExport.length}\n\n`;
 
     const headers = [
       'Sale Date & Time',
@@ -102,7 +198,11 @@ export const DashboardPage = () => {
       'Customer Phone',
       'Items Count',
       'Line Items Details',
-      'Payment Method',
+      'Payment Mode',
+      'Payment Status',
+      'Cash Collected (INR)',
+      'UPI / Card (INR)',
+      'Due Balance (INR)',
       'Cashier',
       'Subtotal (INR)',
       'Tax Amount (INR)',
@@ -120,11 +220,56 @@ export const DashboardPage = () => {
       const itemDetails = Array.isArray(s.items)
         ? s.items.map((i) => `${i.productName} (x${i.unit})`).join('; ')
         : s.productName || '';
-      const payMethod = s.paymentMethod || 'CASH';
-      const cashier = s.cashierName || 'Cashier';
+
+      const method = String(s.paymentMethod || 'CASH').trim().toUpperCase();
+      let payMethod = method;
+      if (method === 'SPLIT' && s.splitDetails) {
+        payMethod = `SPLIT (Cash: ${Number(s.splitDetails.cashAmount || 0).toFixed(0)}, Card: ${Number(s.splitDetails.cardAmount || 0).toFixed(0)}, UPI: ${Number(s.splitDetails.upiAmount || 0).toFixed(0)})`;
+      }
+
+      const grandTotal = Number(s.grandTotal || s.subtotal || 0);
+      const status = String(s.paymentStatus || 'PAID').toUpperCase();
+
+      let paid = 0;
+      if (s.paidAmount !== undefined && s.paidAmount !== null && !isNaN(Number(s.paidAmount))) {
+        paid = Number(s.paidAmount);
+      } else if (status === 'UNPAID') {
+        paid = 0;
+      } else {
+        paid = grandTotal;
+      }
+
+      const due = s.dueAmount !== undefined && s.dueAmount !== null && !isNaN(Number(s.dueAmount))
+        ? Number(s.dueAmount)
+        : Math.max(0, grandTotal - paid);
+
+      let cashPortion = 0;
+      let digitalPortion = 0;
+
+      if (method === 'CASH') {
+        cashPortion = paid;
+      } else if (method === 'SPLIT') {
+        const splitCash = Number(s.splitDetails?.cashAmount || 0);
+        const splitCard = Number(s.splitDetails?.cardAmount || 0);
+        const splitUpi = Number(s.splitDetails?.upiAmount || 0);
+        if (splitCash > 0 || splitCard > 0 || splitUpi > 0) {
+          cashPortion = splitCash;
+          digitalPortion = splitCard + splitUpi;
+        } else {
+          cashPortion = paid / 2;
+          digitalPortion = paid / 2;
+        }
+      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR'].includes(method)) {
+        digitalPortion = paid;
+      } else if (method.includes('CASH')) {
+        cashPortion = paid;
+      } else {
+        digitalPortion = paid;
+      }
+
+      const cashier = s.cashierName && s.cashierName.toLowerCase() !== 'cashier' ? s.cashierName : (s.recordedByName || 'Staff');
       const subtotal = Number(s.subtotal || 0).toFixed(2);
       const tax = Number(s.taxAmount || 0).toFixed(2);
-      const grandTotal = Number(s.grandTotal || s.subtotal || 0).toFixed(2);
 
       const row = [
         dateStr,
@@ -134,10 +279,14 @@ export const DashboardPage = () => {
         itemsCount,
         itemDetails,
         payMethod,
+        status,
+        cashPortion.toFixed(2),
+        digitalPortion.toFixed(2),
+        due.toFixed(2),
         cashier,
         subtotal,
         tax,
-        grandTotal,
+        grandTotal.toFixed(2),
       ];
 
       csvContent += row.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(',') + '\n';
@@ -174,25 +323,6 @@ export const DashboardPage = () => {
   useEffect(() => {
     loadDashboardData();
   }, [selectedBranchId, currentBranch?._id, selectedMonth, role, dispatch]);
-
-  const monthSalesList = Array.isArray(monthlySales?.sales) ? monthlySales.sales : [];
-  const filteredMonthSales = monthSalesList.filter((s) => {
-    if (!s) return false;
-    const q = (monthlySearch || '').toLowerCase().trim();
-    if (!q) return true;
-    const inv = String(s.invoiceNumber || '').toLowerCase();
-    const cust = String(s.customerName || '').toLowerCase();
-    const phone = String(s.customerPhone || '').toLowerCase();
-    const cashier = String(s.cashierName || '').toLowerCase();
-    const method = String(s.paymentMethod || '').toLowerCase();
-    return (
-      inv.includes(q) ||
-      cust.includes(q) ||
-      phone.includes(q) ||
-      cashier.includes(q) ||
-      method.includes(q)
-    );
-  });
 
   return (
     <div className="space-y-6">
@@ -428,16 +558,37 @@ export const DashboardPage = () => {
                       </div>
                     </td>
                     <td>
-                      <span
-                        className={`badge ${sale.paymentMethod === 'CASH'
-                          ? 'badge-emerald'
-                          : sale.paymentMethod === 'UPI'
-                            ? 'badge-indigo'
-                            : 'badge-amber'
-                          }`}
-                      >
-                        {sale.paymentMethod || 'CASH'}
-                      </span>
+                      {(() => {
+                        const m = String(sale.paymentMethod || 'CASH').trim().toUpperCase();
+                        if (m === 'SPLIT' && sale.splitDetails) {
+                          const c = Number(sale.splitDetails.cashAmount || 0);
+                          const d = Number(sale.splitDetails.cardAmount || 0) + Number(sale.splitDetails.upiAmount || 0);
+                          return (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="badge bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-bold">
+                                SPLIT
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500 whitespace-nowrap">
+                                {c > 0 && `Cash: ₹${c.toFixed(0)} `}
+                                {d > 0 && `Dig: ₹${d.toFixed(0)}`}
+                              </span>
+                            </div>
+                          );
+                        }
+                        return (
+                          <span
+                            className={`badge ${
+                              m === 'CASH'
+                                ? 'badge-emerald'
+                                : m === 'UPI'
+                                  ? 'badge-indigo'
+                                  : 'badge-purple'
+                            } text-[10px] font-bold`}
+                          >
+                            {m}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="font-medium text-slate-700">
                       {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
@@ -769,39 +920,46 @@ export const DashboardPage = () => {
                 <div className="p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl">
                   <span className="text-xs font-bold text-indigo-600 uppercase">Total Monthly Sales</span>
                   <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
-                    ₹{Number(monthlySales?.totalSalesAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{salesMetrics.totalSales.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <span className="text-[11px] text-indigo-500 font-medium">
-                    {filteredMonthSales.length} invoice records
+                    {salesMetrics.invoicesCount} invoice {salesMetrics.invoicesCount === 1 ? 'record' : 'records'}
                   </span>
                 </div>
 
                 <div className="p-4 bg-emerald-50/60 border border-emerald-100 rounded-xl">
                   <span className="text-xs font-bold text-emerald-600 uppercase">Cash Collection</span>
                   <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
-                    ₹{filteredMonthSales
-                      .filter((s) => s.paymentMethod === 'CASH')
-                      .reduce((sum, s) => sum + Number(s.grandTotal || s.subtotal || 0), 0)
-                      .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{salesMetrics.totalCash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <span className="text-[11px] text-emerald-600 font-medium">
-                    {filteredMonthSales.filter((s) => s.paymentMethod === 'CASH').length} cash transactions
+                    {salesMetrics.cashCount} cash {salesMetrics.cashCount === 1 ? 'transaction' : 'transactions'}
                   </span>
                 </div>
 
                 <div className="p-4 bg-purple-50/60 border border-purple-100 rounded-xl">
                   <span className="text-xs font-bold text-purple-600 uppercase">UPI / Card Sales</span>
                   <div className="text-xl font-extrabold text-slate-900 font-mono mt-1">
-                    ₹{filteredMonthSales
-                      .filter((s) => s.paymentMethod !== 'CASH')
-                      .reduce((sum, s) => sum + Number(s.grandTotal || s.subtotal || 0), 0)
-                      .toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    ₹{salesMetrics.totalDigital.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                   </div>
                   <span className="text-[11px] text-purple-600 font-medium">
-                    {filteredMonthSales.filter((s) => s.paymentMethod !== 'CASH').length} digital transactions
+                    {salesMetrics.digitalCount} digital {salesMetrics.digitalCount === 1 ? 'transaction' : 'transactions'}
                   </span>
                 </div>
               </div>
+
+              {/* Pending Due Notice if any exists */}
+              {salesMetrics.totalDue > 0 && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between text-xs font-semibold text-amber-800">
+                  <span className="flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                    Pending Customer Due Amount for {selectedMonth}:
+                  </span>
+                  <span className="font-mono font-bold text-rose-700 bg-white px-2.5 py-0.5 rounded-lg border border-amber-200">
+                    ₹{salesMetrics.totalDue.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
 
               {/* Full Invoices Detailed Table */}
               <div className="space-y-2">
@@ -825,24 +983,55 @@ export const DashboardPage = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredMonthSales.map((sale) => (
-                        <tr key={sale._id} onClick={() => handleOpenInvoice(sale)} className="cursor-pointer hover:bg-slate-50">
-                          <td className="font-mono text-slate-500">
-                            {new Date(sale.createdAt).toLocaleDateString('en-IN')}
-                          </td>
-                          <td className="font-mono font-bold text-indigo-600">{sale.invoiceNumber}</td>
-                          <td className="font-medium text-slate-900">{sale.customerName || 'Walk-in'}</td>
-                          <td>
-                            <span className="badge badge-indigo text-[10px]">{sale.paymentMethod || 'CASH'}</span>
-                          </td>
-                          <td className="text-slate-600">
-                            {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
-                          </td>
-                          <td className="text-right font-mono font-bold text-slate-900">
-                            ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredMonthSales.map((sale) => {
+                        const m = String(sale.paymentMethod || 'CASH').trim().toUpperCase();
+                        const isSplit = m === 'SPLIT' && sale.splitDetails;
+                        const splitCash = isSplit ? Number(sale.splitDetails?.cashAmount || 0) : 0;
+                        const splitDigital = isSplit
+                          ? Number(sale.splitDetails?.cardAmount || 0) + Number(sale.splitDetails?.upiAmount || 0)
+                          : 0;
+
+                        return (
+                          <tr key={sale._id} onClick={() => handleOpenInvoice(sale)} className="cursor-pointer hover:bg-slate-50">
+                            <td className="font-mono text-slate-500">
+                              {new Date(sale.createdAt).toLocaleDateString('en-IN')}
+                            </td>
+                            <td className="font-mono font-bold text-indigo-600">{sale.invoiceNumber}</td>
+                            <td className="font-medium text-slate-900">{sale.customerName || 'Walk-in'}</td>
+                            <td>
+                              {isSplit ? (
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="badge bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-bold">
+                                    SPLIT
+                                  </span>
+                                  <span className="text-[10px] font-mono text-slate-500 whitespace-nowrap">
+                                    {splitCash > 0 && `Cash: ₹${splitCash.toFixed(0)} `}
+                                    {splitDigital > 0 && `Dig: ₹${splitDigital.toFixed(0)}`}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span
+                                  className={`badge ${
+                                    m === 'CASH'
+                                      ? 'badge-emerald'
+                                      : m === 'UPI'
+                                        ? 'badge-indigo'
+                                        : 'badge-purple'
+                                  } text-[10px] font-bold`}
+                                >
+                                  {m}
+                                </span>
+                              )}
+                            </td>
+                            <td className="text-slate-600">
+                              {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
+                            </td>
+                            <td className="text-right font-mono font-bold text-slate-900">
+                              ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -889,10 +1078,15 @@ export const DashboardPage = () => {
               Monthly Sales Ledger Report - {selectedMonth}
             </h2>
           </div>
-          <div className="text-right text-xs">
+          <div className="text-right text-xs space-y-0.5">
             <p><strong>Generated On:</strong> {new Date().toLocaleString('en-IN')}</p>
             <p><strong>Branch:</strong> {currentBranch?.name || 'All Branches'}</p>
-            <p><strong>Total Sales:</strong> ₹{Number(monthlySales?.totalSalesAmount || 0).toFixed(2)}</p>
+            <p><strong>Total Sales:</strong> ₹{salesMetrics.totalSales.toFixed(2)}</p>
+            <p><strong>Cash Collection:</strong> ₹{salesMetrics.totalCash.toFixed(2)} ({salesMetrics.cashCount} txns)</p>
+            <p><strong>UPI / Card Collection:</strong> ₹{salesMetrics.totalDigital.toFixed(2)} ({salesMetrics.digitalCount} txns)</p>
+            {salesMetrics.totalDue > 0 && (
+              <p className="text-red-600 font-bold"><strong>Pending Due:</strong> ₹{salesMetrics.totalDue.toFixed(2)}</p>
+            )}
             <p><strong>Total Invoices:</strong> {filteredMonthSales.length}</p>
           </div>
         </div>
@@ -910,23 +1104,33 @@ export const DashboardPage = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredMonthSales.map((sale, idx) => (
-              <tr key={sale._id || idx} className="border-b border-gray-200">
-                <td className="p-2 border-r border-gray-200">
-                  {new Date(sale.createdAt).toLocaleString('en-IN')}
-                </td>
-                <td className="p-2 border-r border-gray-200 font-mono font-bold">{sale.invoiceNumber}</td>
-                <td className="p-2 border-r border-gray-200">{sale.customerName || 'Walk-in'}</td>
-                <td className="p-2 border-r border-gray-200 font-mono">{sale.customerPhone || '-'}</td>
-                <td className="p-2 border-r border-gray-200">{sale.paymentMethod || 'CASH'}</td>
-                <td className="p-2 border-r border-gray-200">
-                  {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
-                </td>
-                <td className="p-2 text-right font-mono font-bold">
-                  ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
-                </td>
-              </tr>
-            ))}
+            {filteredMonthSales.map((sale, idx) => {
+              const m = String(sale.paymentMethod || 'CASH').trim().toUpperCase();
+              let payDisplay = m;
+              if (m === 'SPLIT' && sale.splitDetails) {
+                const c = Number(sale.splitDetails?.cashAmount || 0);
+                const d = Number(sale.splitDetails?.cardAmount || 0) + Number(sale.splitDetails?.upiAmount || 0);
+                payDisplay = `SPLIT (Cash: ₹${c.toFixed(0)}, Dig: ₹${d.toFixed(0)})`;
+              }
+
+              return (
+                <tr key={sale._id || idx} className="border-b border-gray-200">
+                  <td className="p-2 border-r border-gray-200">
+                    {new Date(sale.createdAt).toLocaleString('en-IN')}
+                  </td>
+                  <td className="p-2 border-r border-gray-200 font-mono font-bold">{sale.invoiceNumber}</td>
+                  <td className="p-2 border-r border-gray-200">{sale.customerName || 'Walk-in'}</td>
+                  <td className="p-2 border-r border-gray-200 font-mono">{sale.customerPhone || '-'}</td>
+                  <td className="p-2 border-r border-gray-200">{payDisplay}</td>
+                  <td className="p-2 border-r border-gray-200">
+                    {sale.cashierName && sale.cashierName.toLowerCase() !== 'cashier' ? sale.cashierName : (sale.recordedByName || 'Staff')}
+                  </td>
+                  <td className="p-2 text-right font-mono font-bold">
+                    ₹{Number(sale.grandTotal || sale.subtotal || 0).toFixed(2)}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 

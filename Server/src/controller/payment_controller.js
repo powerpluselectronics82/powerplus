@@ -15,14 +15,26 @@ const invalidateSaleCaches = async (companyId, branchId, cashierId) => {
       `sales:recent:${companyId}:${branchId}`,
       `sales:warranties:${companyId}`,
       `sales:warranties:${companyId}:${branchId}`,
+      `sales:company:${companyId}:all`,
+      `sales:company:${companyId}:branch:${branchId}`,
     ];
     if (cashierId) {
       keysToDelete.push(
         `sales:daily:${companyId}:${branchId}:${cashierId}`,
-        `sales:recent:${companyId}:${branchId}:${cashierId}`
+        `sales:recent:${companyId}:${branchId}:${cashierId}`,
+        `sales:company:${companyId}:cashier:${cashierId}:today`
       );
     }
-    await redis.del(...keysToDelete);
+    const monthlyKeys = await redis.keys(`sales:company:${companyId}:branch:${branchId}:month:*`);
+    keysToDelete.push(...monthlyKeys);
+    const summaryKeys = await redis.keys(`sales:summary:*:company:${companyId}:*`);
+    keysToDelete.push(...summaryKeys);
+    const summaryV1Keys = await redis.keys(`sales:summary:company:${companyId}:*`);
+    keysToDelete.push(...summaryV1Keys);
+
+    if (keysToDelete.length > 0) {
+      await redis.del(...keysToDelete);
+    }
   } catch (err) {
     console.error("Failed to invalidate sale cache:", err.message);
   }

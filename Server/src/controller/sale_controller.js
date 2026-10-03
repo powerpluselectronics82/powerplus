@@ -782,18 +782,74 @@ const getBranchMonthlySales = async (req, res) => {
       return res.status(400).json({ success: false, message: "month must use YYYY-MM format" });
     }
 
-    const start = new Date(`${month}-01T00:00:00.000Z`);
-    const end = new Date(start);
-    end.setUTCMonth(end.getUTCMonth() + 1);
+    const [yearStr, monthStr] = month.split('-');
+    const year = parseInt(yearStr, 10);
+    const monthIdx = parseInt(monthStr, 10) - 1;
+
+    // Both local and UTC date boundaries to safely cover IST (+05:30) vs UTC without date clipping
+    const localStart = new Date(year, monthIdx, 1, 0, 0, 0, 0);
+    const localEnd = new Date(year, monthIdx + 1, 1, 0, 0, 0, 0);
+    const utcStart = new Date(Date.UTC(year, monthIdx, 1, 0, 0, 0, 0));
+    const utcEnd = new Date(Date.UTC(year, monthIdx + 1, 1, 0, 0, 0, 0));
+
+    const start = new Date(Math.min(localStart.getTime(), utcStart.getTime()));
+    const end = new Date(Math.max(localEnd.getTime(), utcEnd.getTime()));
+
     const cacheKey = `sales:company:${companyId}:branch:${branchId}:month:${month}`;
     const cached = await getCached(cacheKey);
     if (cached) return res.status(200).json({ success: true, data: cached });
 
-    const sales = await Sale.find({
-      companyId,
-      branchId,
+    const query = {
+      companyId: toObjectId(companyId),
       createdAt: { $gte: start, $lt: end },
-    }).sort({ createdAt: -1 }).lean();
+    };
+
+    if (branchId && branchId !== 'all' && mongoose.isValidObjectId(branchId)) {
+      query.branchId = toObjectId(branchId);
+    }
+
+    const sales = await Sale.find(query).sort({ createdAt: -1 }).lean();
+
+    let totalCashCollected = 0;
+    let totalDigitalCollected = 0;
+    let totalDueAmount = 0;
+    let cashCount = 0;
+    let digitalCount = 0;
+
+    for (const sale of sales) {
+      const method = String(sale.paymentMethod || 'CASH').trim().toUpperCase();
+      const grandTotal = Number(sale.grandTotal || sale.subtotal || 0);
+      let paid = sale.paidAmount !== undefined && sale.paidAmount !== null && !isNaN(Number(sale.paidAmount))
+        ? Number(sale.paidAmount)
+        : (String(sale.paymentStatus || '').toUpperCase() === 'UNPAID' ? 0 : grandTotal);
+
+      let due = sale.dueAmount !== undefined && sale.dueAmount !== null && !isNaN(Number(sale.dueAmount))
+        ? Number(sale.dueAmount)
+        : Math.max(0, grandTotal - paid);
+
+      totalDueAmount += due;
+
+      let cashAmt = 0;
+      let digitalAmt = 0;
+
+      if (method === 'CASH') {
+        cashAmt = paid;
+      } else if (method === 'SPLIT' && sale.splitDetails) {
+        cashAmt = Number(sale.splitDetails.cashAmount || 0);
+        digitalAmt = Number(sale.splitDetails.cardAmount || 0) + Number(sale.splitDetails.upiAmount || 0);
+      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR'].includes(method)) {
+        digitalAmt = paid;
+      } else if (method.includes('CASH')) {
+        cashAmt = paid;
+      } else {
+        digitalAmt = paid;
+      }
+
+      totalCashCollected += cashAmt;
+      totalDigitalCollected += digitalAmt;
+      if (cashAmt > 0) cashCount++;
+      if (digitalAmt > 0) digitalCount++;
+    }
 
     const response = {
       companyId,
@@ -801,6 +857,11 @@ const getBranchMonthlySales = async (req, res) => {
       month,
       saleCount: sales.length,
       totalSalesAmount: sales.reduce((total, sale) => total + Number(sale.grandTotal || 0), 0),
+      totalCashCollected,
+      totalDigitalCollected,
+      totalDueAmount,
+      cashCount,
+      digitalCount,
       sales,
     };
 
