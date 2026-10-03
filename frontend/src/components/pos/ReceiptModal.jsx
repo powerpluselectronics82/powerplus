@@ -88,7 +88,7 @@ export const ReceiptModal = () => {
           <div className="text-center mb-6 border-b pb-4 border-slate-200">
             <PowerPlusLogo variant="receipt" className="mb-3" />
             <p className="text-xs text-slate-500 font-medium">
-              Branch: {completedSale.branchName || 'Main Store'}
+              Branch: {completedSale.branchName || 'Main Store'} {completedSale.branchCode ? `(${completedSale.branchCode})` : ''}
             </p>
             <p className="text-xs font-mono text-slate-400 mt-1">
               Invoice #{completedSale.invoiceNumber}

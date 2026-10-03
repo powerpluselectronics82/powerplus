@@ -290,6 +290,11 @@ const getAllBranches = async (req, res) => {
     }
 
     const branches = await Branch.find({ companyId }).lean();
+    branches.forEach((b, idx) => {
+      if (!b.code || !b.code.trim()) {
+        b.code = `BR-${String(idx + 1).padStart(3, '0')}`;
+      }
+    });
 
     try {
       await redis.set(cacheKey, JSON.stringify(branches), "EX", 300);
@@ -334,6 +339,10 @@ const getBranchById = async (req, res) => {
 
     if (!branch) {
       return res.status(404).json({ success: false, message: "Branch not found" });
+    }
+
+    if (!branch.code || !branch.code.trim()) {
+      branch.code = "BR-001";
     }
 
     try {

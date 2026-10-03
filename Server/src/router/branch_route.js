@@ -16,10 +16,10 @@ const { apiLimiter } = require("../middleware/rateLimiter");
 router.post("/addBranch", auth, isOwner, apiLimiter, addBranch);
 
 // Get all branches for the user's company
-router.get("/branches", auth, isOwner, apiLimiter, getAllBranches);
+router.get("/branches", auth, apiLimiter, getAllBranches);
 
 // Get a single branch by ID
-router.get("/branches/:branchId", auth, ownerOrBranchManager, apiLimiter, getBranchById);
+router.get("/branches/:branchId", auth, apiLimiter, getBranchById);
 
 // Update branch manager assignment
 router.patch("/brancheUpdate/:branchId", auth, isOwner, apiLimiter, updateBranchManager);

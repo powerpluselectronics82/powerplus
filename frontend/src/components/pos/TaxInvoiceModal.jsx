@@ -52,11 +52,8 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   const reduxBranches = useAppSelector((state) => state?.branches?.branches) || [];
 
   const targetBranch = useMemo(() => {
-    if (branch && typeof branch === 'object' && (branch.phone || branch.code || branch.name)) {
-      return branch;
-    }
     const saleBranchId = typeof sale?.branchId === 'object' ? sale?.branchId?._id : sale?.branchId;
-    const branchIdentifier = typeof branch === 'string' ? branch : saleBranchId;
+    const branchIdentifier = typeof branch === 'string' ? branch : (branch?._id || saleBranchId || user?.branchId?._id || user?.branchId);
 
     const allBranches = [
       ...(Array.isArray(contextBranches) ? contextBranches : []),
@@ -68,12 +65,22 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
       if (match) return match;
     }
 
-    if (sale?.branchId && typeof sale.branchId === 'object') {
+    const userIdent = user?.userId || user?._id;
+    if (userIdent) {
+      const matchMgr = allBranches.find((b) => String(b.managerId) === String(userIdent));
+      if (matchMgr) return matchMgr;
+    }
+
+    if (branch && typeof branch === 'object' && (branch.code || branch.name)) {
+      return branch;
+    }
+
+    if (sale?.branchId && typeof sale.branchId === 'object' && (sale.branchId.code || sale.branchId.name)) {
       return sale.branchId;
     }
 
-    return contextCurrentBranch || branch || null;
-  }, [branch, sale, contextBranches, reduxBranches, contextCurrentBranch]);
+    return contextCurrentBranch || (allBranches.length > 0 ? allBranches[0] : null) || branch || null;
+  }, [branch, sale, contextBranches, reduxBranches, contextCurrentBranch, user]);
 
   const contactNo = useMemo(() => {
     const rawPhones = targetBranch?.phone || branch?.phone || sale?.branchPhone || targetBranch?.phones;
@@ -237,7 +244,34 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
   const cashierRaw = activeSale.cashierName || sale.cashierName || activeSale.recordedByName || sale.recordedByName || '';
   const cashierName = cashierRaw && cashierRaw.toLowerCase() !== 'cashier' ? cashierRaw : (user?.name || 'Staff');
   const branchName = activeSale.branchName || sale.branchName || targetBranch?.name || branch?.name || 'Main Branch';
-  const branchCode = targetBranch?.code || branch?.code || 'BR01';
+  const branchCode = useMemo(() => {
+    const candidate =
+      targetBranch?.code ||
+      targetBranch?.branchCode ||
+      branch?.code ||
+      branch?.branchCode ||
+      activeSale?.branchCode ||
+      sale?.branchCode ||
+      (typeof activeSale?.branchId === 'object' ? (activeSale?.branchId?.code || activeSale?.branchId?.branchCode) : '') ||
+      (typeof sale?.branchId === 'object' ? (sale?.branchId?.code || sale?.branchId?.branchCode) : '') ||
+      contextCurrentBranch?.code ||
+      contextCurrentBranch?.branchCode ||
+      (Array.isArray(contextBranches) && (contextBranches[0]?.code || contextBranches[0]?.branchCode)) ||
+      (Array.isArray(reduxBranches) && (reduxBranches[0]?.code || reduxBranches[0]?.branchCode)) ||
+      '';
+
+    if (candidate && String(candidate).trim()) {
+      return String(candidate).trim();
+    }
+
+    const fallbackName = targetBranch?.name || branch?.name || activeSale?.branchName || sale?.branchName || '';
+    if (fallbackName && fallbackName.trim()) {
+      const clean = fallbackName.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
+      return `BR-${clean || '001'}`;
+    }
+
+    return 'BR-001';
+  }, [targetBranch, branch, activeSale, sale, contextCurrentBranch, contextBranches, reduxBranches]);
   const companyName = company?.name || 'POWER PLUS ELECTRONICS';
   const companyGstin = company?.gstin || targetBranch?.gstin || branch?.gstin || '10AAGCK1649C1Z4';
   const companyId = company?.companyId || 'U74110KA2016PTC093403';
@@ -353,7 +387,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
             dispatch(invalidateDueSalesCache());
             dispatch(invalidateAnalyticsCache());
           }
-        } catch (_) {}
+        } catch (_) { }
 
         if (typeof onPaymentUpdated === 'function') {
           onPaymentUpdated();
