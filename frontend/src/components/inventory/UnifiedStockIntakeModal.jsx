@@ -554,8 +554,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         }
 
         setSuccessMsg(
-          `Success! Created product and added ${intakeQty} unit(s) of "${
-            formData.name || cleanBarcode
+          `Success! Created product and added ${intakeQty} unit(s) of "${formData.name || cleanBarcode
           }" to branch inventory at ₹${Number(formData.purchasePrice || 0).toLocaleString('en-IN')}.`
         );
       } else {
@@ -574,8 +573,7 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
         }
 
         setSuccessMsg(
-          `Success! Added ${intakeQty} unit(s) of "${
-            formData.name || selectedProduct?.name || cleanBarcode
+          `Success! Added ${intakeQty} unit(s) of "${formData.name || selectedProduct?.name || cleanBarcode
           }" to branch inventory at ₹${Number(formData.purchasePrice || 0).toLocaleString('en-IN')}.`
         );
       }
@@ -998,11 +996,10 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     onClick={() =>
                       setFormData((prev) => ({ ...prev, isSerialized: !prev.isSerialized }))
                     }
-                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
-                      formData.isSerialized
+                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${formData.isSerialized
                         ? 'bg-indigo-600 justify-end'
                         : 'bg-slate-300 justify-start'
-                    } disabled:opacity-60`}
+                      } disabled:opacity-60`}
                   >
                     <div className="w-4 h-4 rounded-full bg-white shadow-sm" />
                   </button>
@@ -1030,44 +1027,40 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                   <button
                     type="button"
                     onClick={() => setSpecsActiveTab('general')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      specsActiveTab === 'general'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${specsActiveTab === 'general'
                         ? 'bg-white text-indigo-700 shadow-sm'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     General
                   </button>
                   <button
                     type="button"
                     onClick={() => setSpecsActiveTab('display')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      specsActiveTab === 'display'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${specsActiveTab === 'display'
                         ? 'bg-white text-indigo-700 shadow-sm'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     Display & Power
                   </button>
                   <button
                     type="button"
                     onClick={() => setSpecsActiveTab('performance')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      specsActiveTab === 'performance'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${specsActiveTab === 'performance'
                         ? 'bg-white text-indigo-700 shadow-sm'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     Performance & Memory
                   </button>
                   <button
                     type="button"
                     onClick={() => setSpecsActiveTab('multimedia')}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                      specsActiveTab === 'multimedia'
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${specsActiveTab === 'multimedia'
                         ? 'bg-white text-indigo-700 shadow-sm'
                         : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                      }`}
                   >
                     Audio & Features
                   </button>
@@ -1425,22 +1418,20 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
                     <button
                       type="button"
                       onClick={() => setSerialInputMode('bulk')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        serialInputMode === 'bulk'
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${serialInputMode === 'bulk'
                           ? 'bg-indigo-600 text-white'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Bulk Paste
                     </button>
                     <button
                       type="button"
                       onClick={() => setSerialInputMode('individual')}
-                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                        serialInputMode === 'individual'
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${serialInputMode === 'individual'
                           ? 'bg-indigo-600 text-white'
                           : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                        }`}
                     >
                       Individual
                     </button>
@@ -1563,11 +1554,10 @@ export const UnifiedStockIntakeModal = ({ isOpen, onClose, onRefresh }) => {
             <button
               type="submit"
               disabled={submitting || (!isExistingProduct && !query.trim())}
-              className={`w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${
-                isExistingProduct
+              className={`w-full py-4 px-6 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all ${isExistingProduct
                   ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-500/25'
                   : 'bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-indigo-500/25'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               {submitting ? (
                 <>

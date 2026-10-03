@@ -8,7 +8,6 @@ import {
   Boxes,
   DollarSign,
   X,
-  Search,
   RefreshCw,
   Package,
   Layers,
@@ -218,10 +217,10 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                     <strong style="color: #0f172a; font-size: 12px;">${item.name}</strong><br/>
                     ${item.description ? `<div style="font-size: 10px; color: #334155; background: #fef3c7; padding: 2px 6px; border-radius: 4px; margin: 3px 0; font-style: italic;"><strong>Desc:</strong> ${item.description}</div>` : ''}
                     ${(() => {
-                      const sps = extractSpecsList(item.specifications);
-                      if (sps.length === 0) return '';
-                      return `<div style="margin: 2px 0;">${sps.map(sp => `<span style="display: inline-block; font-size: 9px; font-weight: bold; background: #e0e7ff; color: #3730a3; padding: 1px 5px; border-radius: 3px; margin: 1px 3px 1px 0;">${sp.label}: ${sp.val}</span>`).join('')}</div>`;
-                    })()}
+        const sps = extractSpecsList(item.specifications);
+        if (sps.length === 0) return '';
+        return `<div style="margin: 2px 0;">${sps.map(sp => `<span style="display: inline-block; font-size: 9px; font-weight: bold; background: #e0e7ff; color: #3730a3; padding: 1px 5px; border-radius: 3px; margin: 1px 3px 1px 0;">${sp.label}: ${sp.val}</span>`).join('')}</div>`;
+      })()}
                     <span style="color: #475569; font-size: 10px;">
                       Cat: <strong>${item.category || 'General'}</strong>
                       ${item.brand ? ` | Brand: <strong>${item.brand}</strong>` : ''}
@@ -233,11 +232,11 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                         <div class="serials-title">Added Serial Numbers (${item.serialNumbers.length}):</div>
                         <div>
                           ${item.serialNumbers.map(s => {
-                            const sn = typeof s === 'object' ? s.serialNumber : s;
-                            const dt = s?.addedAt ? new Date(s.addedAt).toLocaleDateString('en-IN') : '';
-                            const status = typeof s === 'object' ? (s.status || 'available') : 'available';
-                            const isSold = String(status).toLowerCase() === 'sold';
-                            return `
+        const sn = typeof s === 'object' ? s.serialNumber : s;
+        const dt = s?.addedAt ? new Date(s.addedAt).toLocaleDateString('en-IN') : '';
+        const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+        const isSold = String(status).toLowerCase() === 'sold';
+        return `
                               <span class="serial-tag" style="${isSold ? 'background-color: #fee2e2; border-color: #fca5a5; color: #991b1b;' : 'background-color: #f0fdf4; border-color: #86efac; color: #166534;'}">
                                 <span style="${isSold ? 'text-decoration: line-through;' : ''}">${sn}</span>
                                 <span style="font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 3px; margin-left: 4px; ${isSold ? 'background-color: #ef4444; color: #ffffff;' : 'background-color: #10b981; color: #ffffff;'}">
@@ -246,7 +245,7 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
                                 ${dt ? `<span class="serial-date">(${dt})</span>` : ''}
                               </span>
                             `;
-                          }).join('')}
+      }).join('')}
                         </div>
                       </div>
                     ` : ''}
@@ -345,10 +344,10 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
 
       const serialsStr = Array.isArray(item.serialNumbers) && item.serialNumbers.length > 0
         ? item.serialNumbers.map((s) => {
-            const sn = typeof s === 'object' ? s.serialNumber : s;
-            const status = typeof s === 'object' ? (s.status || 'available') : 'available';
-            return `${sn} (${String(status).toUpperCase()})`;
-          }).join('; ')
+          const sn = typeof s === 'object' ? s.serialNumber : s;
+          const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+          return `${sn} (${String(status).toUpperCase()})`;
+        }).join('; ')
         : 'N/A';
 
       const row = [
@@ -386,331 +385,328 @@ export const MonthlyInventoryReportModal = ({ isOpen, onClose, selectedBranchId,
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
         <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-6xl w-full p-6 relative max-h-[92vh] flex flex-col overflow-hidden">
-        
-        {/* Modal Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-extrabold border border-indigo-100 shadow-sm">
-              <FileText className="w-6 h-6" />
+
+          {/* Modal Top Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-extrabold border border-indigo-100 shadow-sm">
+                <FileText className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
+                  Monthly Inventory Intake Report
+                </h3>
+                <p className="text-xs text-slate-500 font-medium">
+                  Detailed record of products added to inventory for{' '}
+                  <span className="font-bold text-indigo-700">
+                    {currentBranch ? currentBranch.name : 'All Company Branches'}
+                  </span>
+                </p>
+              </div>
             </div>
-            <div>
-              <h3 className="font-extrabold text-slate-900 text-lg flex items-center gap-2">
-                Monthly Inventory Intake Report
-              </h3>
-              <p className="text-xs text-slate-500 font-medium">
-                Detailed record of products added to inventory for{' '}
-                <span className="font-bold text-indigo-700">
-                  {currentBranch ? currentBranch.name : 'All Company Branches'}
-                </span>
-              </p>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleDownloadExcel}
+                disabled={!reportData || filteredItems.length === 0}
+                className="btn-secondary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 shadow-2xs disabled:opacity-50 cursor-pointer transition-colors"
+                title="Download Monthly Inventory Intake Report as Excel CSV"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Export Excel</span>
+              </button>
+
+              <button
+                onClick={handlePrint}
+                disabled={!reportData || filteredItems.length === 0}
+                className="btn-secondary py-2 px-4 text-xs font-bold flex items-center gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 shadow-sm disabled:opacity-50"
+                title="Print Monthly Inventory Report"
+              >
+                <Printer className="w-4 h-4 text-indigo-600" />
+                <span>Print Report</span>
+              </button>
+
+              <button
+                onClick={onClose}
+                className="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadExcel}
-              disabled={!reportData || filteredItems.length === 0}
-              className="btn-secondary py-2 px-3.5 text-xs font-bold flex items-center gap-1.5 border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 shadow-2xs disabled:opacity-50 cursor-pointer transition-colors"
-              title="Download Monthly Inventory Intake Report as Excel CSV"
-            >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              <span>Export Excel</span>
-            </button>
+          {/* Month Selector & Search Controls */}
+          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 mb-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                <Calendar className="w-4 h-4 text-indigo-600" />
+                <label htmlFor="modal-month-picker-input" className="text-xs font-bold text-slate-600">Month:</label>
+                <input
+                  id="modal-month-picker-input"
+                  type="month"
+                  value={month}
+                  onChange={handleMonthChange}
+                  className="text-xs font-bold font-mono text-slate-900 border-none outline-none focus:ring-0 bg-transparent"
+                />
+              </div>
 
-            <button
-              onClick={handlePrint}
-              disabled={!reportData || filteredItems.length === 0}
-              className="btn-secondary py-2 px-4 text-xs font-bold flex items-center gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 shadow-sm disabled:opacity-50"
-              title="Print Monthly Inventory Report"
-            >
-              <Printer className="w-4 h-4 text-indigo-600" />
-              <span>Print Report</span>
-            </button>
+              {month !== currentMonthStr && (
+                <button
+                  onClick={() => setMonth(currentMonthStr)}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline transition-colors"
+                >
+                  Current Month
+                </button>
+              )}
 
-            <button
-              onClick={onClose}
-              className="w-9 h-9 rounded-xl hover:bg-slate-100 text-slate-400 flex items-center justify-center font-bold text-sm transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+              <button
+                onClick={() => fetchReport(month)}
+                className="p-2 rounded-xl text-slate-500 hover:bg-white hover:text-indigo-600 transition-all border border-transparent hover:border-slate-200"
+                title="Refresh Month Data"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
+              </button>
+            </div>
 
-        {/* Month Selector & Search Controls */}
-        <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 mb-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="flex items-center gap-3 w-full sm:w-auto">
-            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
-              <Calendar className="w-4 h-4 text-indigo-600" />
-              <label htmlFor="modal-month-picker-input" className="text-xs font-bold text-slate-600">Month:</label>
+            <div className="relative w-full sm:w-72">
               <input
-                id="modal-month-picker-input"
-                type="month"
-                value={month}
-                onChange={handleMonthChange}
-                className="text-xs font-bold font-mono text-slate-900 border-none outline-none focus:ring-0 bg-transparent"
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Filter by product, serial, barcode..."
+                className="input-tactile text-xs px-3.5 py-1.5"
               />
             </div>
-
-            {month !== currentMonthStr && (
-              <button
-                onClick={() => setMonth(currentMonthStr)}
-                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 underline transition-colors"
-              >
-                Current Month
-              </button>
-            )}
-
-            <button
-              onClick={() => fetchReport(month)}
-              className="p-2 rounded-xl text-slate-500 hover:bg-white hover:text-indigo-600 transition-all border border-transparent hover:border-slate-200"
-              title="Refresh Month Data"
-            >
-              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-indigo-600' : ''}`} />
-            </button>
           </div>
 
-          <div className="relative w-full sm:w-72">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter by product, serial, barcode..."
-              className="input-tactile text-xs pl-9 py-1.5"
-            />
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          </div>
-        </div>
-
-        {/* Summary Widgets */}
-        {reportData && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div className="p-3 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 flex items-center gap-3 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
-                <Boxes className="w-5 h-5" />
+          {/* Summary Widgets */}
+          {reportData && (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+              <div className="p-3 bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 flex items-center gap-3 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+                  <Boxes className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider block">Intake Batches</span>
+                  <span className="text-lg font-extrabold font-mono text-slate-900">{reportData.totalBatches}</span>
+                </div>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider block">Intake Batches</span>
-                <span className="text-lg font-extrabold font-mono text-slate-900">{reportData.totalBatches}</span>
+
+              <div className="p-3 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-100 flex items-center gap-3 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider block">Units Added</span>
+                  <span className="text-lg font-extrabold font-mono text-slate-900">{reportData.totalUnitsAdded.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+
+              <div className="p-3 bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-100 flex items-center gap-3 shadow-sm">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                  <DollarSign className="w-5 h-5" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700/80 uppercase tracking-wider block">Purchase Valuation</span>
+                  <span className="text-base font-extrabold font-mono text-slate-900">₹{reportData.totalIntakeCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                </div>
               </div>
             </div>
+          )}
 
-            <div className="p-3 bg-gradient-to-br from-emerald-50 to-white rounded-2xl border border-emerald-100 flex items-center gap-3 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
-                <Package className="w-5 h-5" />
+          {/* Data Table */}
+          <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl shadow-inner bg-white">
+            {loading ? (
+              <div className="p-12 text-center text-slate-400 font-semibold text-sm flex flex-col items-center justify-center gap-2">
+                <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
+                <span>Fetching monthly inventory intake report...</span>
               </div>
-              <div>
-                <span className="text-[10px] font-bold text-emerald-600/80 uppercase tracking-wider block">Units Added</span>
-                <span className="text-lg font-extrabold font-mono text-slate-900">{reportData.totalUnitsAdded.toLocaleString('en-IN')}</span>
+            ) : !reportData || filteredItems.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 font-semibold text-sm">
+                No product intake records found for {month}.
               </div>
-            </div>
+            ) : (
+              <table className="tactile-table">
+                <thead className="sticky top-0 z-10 bg-slate-900 text-white">
+                  <tr>
+                    <th>Intake Day & Time</th>
+                    <th>Branch</th>
+                    <th>Product Details (Specs & Serials)</th>
+                    <th>Barcode</th>
+                    <th>Units Added</th>
+                    <th>Buy Price (Cost)</th>
+                    <th>Total Purchase Cost</th>
+                    <th className="text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredItems.map((item) => {
+                    const isExpanded = expandedSerials[item.inventoryId];
+                    const hasSerials = item.isSerialized && (item.serialNumbers || []).length > 0;
+                    const specsList = extractSpecsList(item.specifications);
 
-            <div className="p-3 bg-gradient-to-br from-amber-50 to-white rounded-2xl border border-amber-100 flex items-center gap-3 shadow-sm">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">
-                <DollarSign className="w-5 h-5" />
-              </div>
-              <div>
-                <span className="text-[10px] font-bold text-amber-700/80 uppercase tracking-wider block">Purchase Valuation</span>
-                <span className="text-base font-extrabold font-mono text-slate-900">₹{reportData.totalIntakeCost.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Data Table */}
-        <div className="flex-1 overflow-y-auto border border-slate-100 rounded-2xl shadow-inner bg-white">
-          {loading ? (
-            <div className="p-12 text-center text-slate-400 font-semibold text-sm flex flex-col items-center justify-center gap-2">
-              <RefreshCw className="w-6 h-6 animate-spin text-indigo-600" />
-              <span>Fetching monthly inventory intake report...</span>
-            </div>
-          ) : !reportData || filteredItems.length === 0 ? (
-            <div className="p-12 text-center text-slate-400 font-semibold text-sm">
-              No product intake records found for {month}.
-            </div>
-          ) : (
-            <table className="tactile-table">
-              <thead className="sticky top-0 z-10 bg-slate-900 text-white">
-                <tr>
-                  <th>Intake Day & Time</th>
-                  <th>Branch</th>
-                  <th>Product Details (Specs & Serials)</th>
-                  <th>Barcode</th>
-                  <th>Units Added</th>
-                  <th>Buy Price (Cost)</th>
-                  <th>Total Purchase Cost</th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredItems.map((item) => {
-                  const isExpanded = expandedSerials[item.inventoryId];
-                  const hasSerials = item.isSerialized && (item.serialNumbers || []).length > 0;
-                  const specsList = extractSpecsList(item.specifications);
-
-                  return (
-                    <React.Fragment key={item.inventoryId}>
-                      <tr className="hover:bg-slate-50/80 transition-colors">
-                        <td className="font-mono text-xs font-bold text-indigo-700">
-                          <div>{new Date(item.createdAt).toLocaleDateString('en-IN')}</div>
-                          <div className="text-[10px] text-slate-400 font-normal">
-                            {new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </td>
-                        <td className="text-xs font-semibold text-slate-700">
-                          {item.branchName}
-                        </td>
-                        <td>
-                          <div>
-                            <div className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
-                              <span>{item.name}</span>
-                              {hasSerials && (
-                                <button
-                                  onClick={() => toggleSerialExpand(item.inventoryId)}
-                                  className="inline-flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded border border-indigo-100 hover:bg-indigo-100 transition-colors"
-                                >
-                                  <Layers className="w-3 h-3" />
-                                  <span>{item.serialNumbers.length} Serials</span>
-                                  {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
-                                </button>
-                              )}
+                    return (
+                      <React.Fragment key={item.inventoryId}>
+                        <tr className="hover:bg-slate-50/80 transition-colors">
+                          <td className="font-mono text-xs font-bold text-indigo-700">
+                            <div>{new Date(item.createdAt).toLocaleDateString('en-IN')}</div>
+                            <div className="text-[10px] text-slate-400 font-normal">
+                              {new Date(item.createdAt).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                             </div>
-
-                            {/* Description shown FIRST if present */}
-                            {item.description && (
-                              <div className="text-[11px] text-slate-700 bg-amber-50/80 border border-amber-200/90 rounded-lg px-2.5 py-1 my-1.5 font-medium flex items-start gap-1.5 shadow-2xs">
-                                <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
-                                <span className="line-clamp-2">{item.description}</span>
-                              </div>
-                            )}
-
-                            {/* Technical Specifications shown FIRST if present */}
-                            {specsList.length > 0 && (
-                              <div className="flex flex-wrap gap-1 my-1.5">
-                                {specsList.map((sp, idx) => (
-                                  <span
-                                    key={idx}
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-900 border border-indigo-200/80 font-mono shadow-2xs"
+                          </td>
+                          <td className="text-xs font-semibold text-slate-700">
+                            {item.branchName}
+                          </td>
+                          <td>
+                            <div>
+                              <div className="font-extrabold text-slate-900 text-xs flex items-center gap-1.5 flex-wrap">
+                                <span>{item.name}</span>
+                                {hasSerials && (
+                                  <button
+                                    onClick={() => toggleSerialExpand(item.inventoryId)}
+                                    className="inline-flex items-center gap-1 text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded border border-indigo-100 hover:bg-indigo-100 transition-colors"
                                   >
-                                    <span className="text-indigo-500 font-semibold uppercase text-[9px]">{sp.label}:</span>
-                                    <span>{sp.val}</span>
-                                  </span>
-                                ))}
+                                    <Layers className="w-3 h-3" />
+                                    <span>{item.serialNumbers.length} Serials</span>
+                                    {isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                                  </button>
+                                )}
                               </div>
-                            )}
 
-                            <div className="text-[11px] text-slate-500 font-medium mt-0.5">
-                              {item.category || 'General'} {item.brand && `• Brand: ${item.brand}`} {item.modelNumber && `• Model: ${item.modelNumber}`} {item.hsnCode && `• HSN: ${item.hsnCode}`}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="font-mono text-xs font-semibold text-slate-600">
-                          {item.barcode}
-                        </td>
-                        <td className="font-mono text-xs font-bold">
-                          <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                            +{item.stockAdded}
-                          </span>
-                        </td>
-                        <td className="font-mono text-xs text-slate-700 font-medium">
-                          ₹{Number(item.purchasePrice || 0).toFixed(2)}
-                        </td>
-                        <td className="font-mono text-xs font-extrabold text-slate-900">
-                          ₹{Number(item.totalPurchaseValue || 0).toFixed(2)}
-                        </td>
-                        <td className="text-right">
-                          <button
-                            onClick={() => handleOpenEditIntake(item)}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
-                            title="Edit product details, inventory stock, serials and transaction"
-                          >
-                            <Edit3 className="w-3 h-3 text-indigo-600" />
-                            <span>Edit</span>
-                          </button>
-                        </td>
-                      </tr>
+                              {/* Description shown FIRST if present */}
+                              {item.description && (
+                                <div className="text-[11px] text-slate-700 bg-amber-50/80 border border-amber-200/90 rounded-lg px-2.5 py-1 my-1.5 font-medium flex items-start gap-1.5 shadow-2xs">
+                                  <FileText className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                                  <span className="line-clamp-2">{item.description}</span>
+                                </div>
+                              )}
 
-                      {/* Serial Numbers Breakdown Sub-Row */}
-                      {hasSerials && (isExpanded || searchQuery.trim().length > 0) && (
-                        <tr className="bg-indigo-50/40">
-                          <td colSpan="8" className="p-3 pl-10">
-                            <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm space-y-2">
-                              <div className="flex items-center justify-between text-xs font-bold text-indigo-900 border-b border-indigo-50 pb-1.5">
-                                <span className="uppercase tracking-wider text-[10px] text-indigo-600">
-                                  Serialized Product Intake Breakdown ({item.serialNumbers.length} Serial Units Added)
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                {item.serialNumbers.map((s, idx) => {
-                                  const sn = typeof s === 'object' ? s.serialNumber : s;
-                                  const dt = s?.addedAt ? new Date(s.addedAt) : new Date(item.createdAt);
-                                  const status = typeof s === 'object' ? (s.status || 'available') : 'available';
-                                  const isSold = String(status).toLowerCase() === 'sold';
-
-                                  return (
-                                    <div
-                                      key={s?.unitId || idx}
-                                      className={`p-2.5 rounded-xl border flex items-center justify-between text-xs font-mono transition-all ${
-                                        isSold
-                                          ? 'bg-rose-50/70 border-rose-200 shadow-2xs'
-                                          : 'bg-slate-50 border-slate-200/80'
-                                      }`}
+                              {/* Technical Specifications shown FIRST if present */}
+                              {specsList.length > 0 && (
+                                <div className="flex flex-wrap gap-1 my-1.5">
+                                  {specsList.map((sp, idx) => (
+                                    <span
+                                      key={idx}
+                                      className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-900 border border-indigo-200/80 font-mono shadow-2xs"
                                     >
-                                      <div>
-                                        <div className="flex items-center gap-1.5">
-                                          <span className={`font-bold ${isSold ? 'line-through text-slate-500' : 'text-slate-900'}`}>
-                                            {sn}
-                                          </span>
-                                          {isSold && (
-                                            <span className="text-[10px] font-bold text-rose-700 bg-rose-100/90 px-1.5 py-0.5 rounded">
-                                              Not Available
-                                            </span>
-                                          )}
-                                        </div>
-                                        <span className="text-[10px] text-slate-400 font-normal block mt-0.5">
-                                          Added: {dt.toLocaleDateString('en-IN')} {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                      </div>
-                                      <span
-                                        className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${
-                                          isSold
-                                            ? 'bg-rose-600 text-white shadow-xs'
-                                            : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                                        }`}
-                                      >
-                                        {isSold ? 'SOLD' : 'AVAILABLE'}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                                      <span className="text-indigo-500 font-semibold uppercase text-[9px]">{sp.label}:</span>
+                                      <span>{sp.val}</span>
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+
+                              <div className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                {item.category || 'General'} {item.brand && `• Brand: ${item.brand}`} {item.modelNumber && `• Model: ${item.modelNumber}`} {item.hsnCode && `• HSN: ${item.hsnCode}`}
                               </div>
                             </div>
                           </td>
+                          <td className="font-mono text-xs font-semibold text-slate-600">
+                            {item.barcode}
+                          </td>
+                          <td className="font-mono text-xs font-bold">
+                            <span className="px-2 py-0.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
+                              +{item.stockAdded}
+                            </span>
+                          </td>
+                          <td className="font-mono text-xs text-slate-700 font-medium">
+                            ₹{Number(item.purchasePrice || 0).toFixed(2)}
+                          </td>
+                          <td className="font-mono text-xs font-extrabold text-slate-900">
+                            ₹{Number(item.totalPurchaseValue || 0).toFixed(2)}
+                          </td>
+                          <td className="text-right">
+                            <button
+                              onClick={() => handleOpenEditIntake(item)}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg border border-indigo-200 transition-colors shadow-2xs cursor-pointer"
+                              title="Edit product details, inventory stock, serials and transaction"
+                            >
+                              <Edit3 className="w-3 h-3 text-indigo-600" />
+                              <span>Edit</span>
+                            </button>
+                          </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
 
-        {/* Modal Footer */}
-        <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
-          <div>
-            Total <span className="font-bold text-slate-800">{filteredItems.length}</span> added product batch(es) for {month}
+                        {/* Serial Numbers Breakdown Sub-Row */}
+                        {hasSerials && (isExpanded || searchQuery.trim().length > 0) && (
+                          <tr className="bg-indigo-50/40">
+                            <td colSpan="8" className="p-3 pl-10">
+                              <div className="bg-white p-3 rounded-xl border border-indigo-100 shadow-sm space-y-2">
+                                <div className="flex items-center justify-between text-xs font-bold text-indigo-900 border-b border-indigo-50 pb-1.5">
+                                  <span className="uppercase tracking-wider text-[10px] text-indigo-600">
+                                    Serialized Product Intake Breakdown ({item.serialNumbers.length} Serial Units Added)
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                                  {item.serialNumbers.map((s, idx) => {
+                                    const sn = typeof s === 'object' ? s.serialNumber : s;
+                                    const dt = s?.addedAt ? new Date(s.addedAt) : new Date(item.createdAt);
+                                    const status = typeof s === 'object' ? (s.status || 'available') : 'available';
+                                    const isSold = String(status).toLowerCase() === 'sold';
+
+                                    return (
+                                      <div
+                                        key={s?.unitId || idx}
+                                        className={`p-2.5 rounded-xl border flex items-center justify-between text-xs font-mono transition-all ${isSold
+                                            ? 'bg-rose-50/70 border-rose-200 shadow-2xs'
+                                            : 'bg-slate-50 border-slate-200/80'
+                                          }`}
+                                      >
+                                        <div>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={`font-bold ${isSold ? 'line-through text-slate-500' : 'text-slate-900'}`}>
+                                              {sn}
+                                            </span>
+                                            {isSold && (
+                                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100/90 px-1.5 py-0.5 rounded">
+                                                Not Available
+                                              </span>
+                                            )}
+                                          </div>
+                                          <span className="text-[10px] text-slate-400 font-normal block mt-0.5">
+                                            Added: {dt.toLocaleDateString('en-IN')} {dt.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
+                                          </span>
+                                        </div>
+                                        <span
+                                          className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${isSold
+                                              ? 'bg-rose-600 text-white shadow-xs'
+                                              : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                                            }`}
+                                        >
+                                          {isSold ? 'SOLD' : 'AVAILABLE'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
           </div>
-          <button
-            onClick={onClose}
-            className="btn-primary py-2 px-5 text-xs font-bold"
-          >
-            Close Report
-          </button>
+
+          {/* Modal Footer */}
+          <div className="pt-4 mt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500 font-medium">
+            <div>
+              Total <span className="font-bold text-slate-800">{filteredItems.length}</span> added product batch(es) for {month}
+            </div>
+            <button
+              onClick={onClose}
+              className="btn-primary py-2 px-5 text-xs font-bold"
+            >
+              Close Report
+            </button>
+          </div>
         </div>
       </div>
-    </div>
 
-    {/* Edit Monthly Intake Modal */}
+      {/* Edit Monthly Intake Modal */}
       {editingIntakeItem && (
         <EditMonthlyIntakeModal
           isOpen={Boolean(editingIntakeItem)}

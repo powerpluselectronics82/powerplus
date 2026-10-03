@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useBranch } from '../context/BranchContext';
 import { productService } from '../services/productService';
@@ -22,8 +22,8 @@ import {
   Layers,
   ChevronDown,
   ChevronRight,
+  ChevronLeft,
   ArrowLeft,
-  Search,
   Edit3,
   FileSpreadsheet,
 } from 'lucide-react';
@@ -115,6 +115,17 @@ export const ProductsPage = () => {
   const [expandedSerials, setExpandedSerials] = useState({});
   const [editingIntakeItem, setEditingIntakeItem] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(15);
+  const [monthlyPage, setMonthlyPage] = useState(1);
+  const [monthlyPageSize, setMonthlyPageSize] = useState(15);
+
+  useEffect(() => {
+    setCurrentPage(1);
+    setMonthlyPage(1);
+  }, [search, tab]);
 
   const handleOpenEditIntake = (item) => {
     if (!item) return;
@@ -218,53 +229,80 @@ export const ProductsPage = () => {
   const archivedCount = products.filter((p) => p?.status === 'ARCHIVED').length;
   const monthlyIntakeCount = monthlyReportData?.items?.length || 0;
 
-  const filteredProducts = products.filter((p) => {
-    if (!p) return false;
-    const stock = p.availableStock ?? p.stock ?? p.Stock ?? 0;
-    const productStatus = p.status || 'ACTIVE';
+  const filteredProducts = useMemo(() => {
+    return products
+      .filter((p) => {
+        if (!p) return false;
+        const stock = p.availableStock ?? p.stock ?? p.Stock ?? 0;
+        const productStatus = p.status || 'ACTIVE';
 
-    const q = (search || '').toLowerCase().trim();
-    const name = String(p.name || '').toLowerCase();
-    const barcode = String(p.barcode || '').toLowerCase();
-    const category = String(p.category || '').toLowerCase();
-    const brand = String(p.brand || '').toLowerCase();
+        const q = (search || '').toLowerCase().trim();
+        const name = String(p.name || '').toLowerCase();
+        const barcode = String(p.barcode || '').toLowerCase();
+        const category = String(p.category || '').toLowerCase();
+        const brand = String(p.brand || '').toLowerCase();
 
-    const matchesSearch =
-      !q ||
-      name.includes(q) ||
-      barcode.includes(q) ||
-      category.includes(q) ||
-      brand.includes(q);
+        const matchesSearch =
+          !q ||
+          name.includes(q) ||
+          barcode.includes(q) ||
+          category.includes(q) ||
+          brand.includes(q);
 
-    if (!matchesSearch) return false;
+        if (!matchesSearch) return false;
 
-    if (tab === 'LOW_STOCK') {
-      return productStatus !== 'ARCHIVED' && stock <= (p.minStockLevel || 5);
-    }
-    if (tab === 'ARCHIVED') {
-      return productStatus === 'ARCHIVED';
-    }
-    return productStatus !== 'ARCHIVED';
-  });
+        if (tab === 'LOW_STOCK') {
+          return productStatus !== 'ARCHIVED' && stock <= (p.minStockLevel || 5);
+        }
+        if (tab === 'ARCHIVED') {
+          return productStatus === 'ARCHIVED';
+        }
+        return productStatus !== 'ARCHIVED';
+      })
+      .sort((a, b) => {
+        const stockA = Number(a.availableStock ?? a.stock ?? a.Stock ?? a.quantity ?? 0);
+        const stockB = Number(b.availableStock ?? b.stock ?? b.Stock ?? b.quantity ?? 0);
+        return stockB - stockA; // Available stock in decreasing order
+      });
+  }, [products, search, tab]);
 
-  const filteredMonthlyItems = (monthlyReportData?.items || []).filter((item) => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    const matchesGeneral =
-      String(item.name || '').toLowerCase().includes(q) ||
-      String(item.barcode || '').toLowerCase().includes(q) ||
-      String(item.category || '').toLowerCase().includes(q) ||
-      String(item.brand || '').toLowerCase().includes(q) ||
-      String(item.modelNumber || '').toLowerCase().includes(q) ||
-      String(item.hsnCode || '').toLowerCase().includes(q);
+  const totalProducts = filteredProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const paginatedProducts = useMemo(() => {
+    const start = (safeCurrentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, safeCurrentPage, pageSize]);
 
-    const matchesSerial = (item.serialNumbers || []).some((s) => {
-      const sn = typeof s === 'object' ? s?.serialNumber : s;
-      return String(sn || '').toLowerCase().includes(q);
-    });
+  const filteredMonthlyItems = useMemo(() => {
+    return (monthlyReportData?.items || [])
+      .filter((item) => {
+        if (!search.trim()) return true;
+        const q = search.toLowerCase();
+        const matchesGeneral =
+          String(item.name || '').toLowerCase().includes(q) ||
+          String(item.barcode || '').toLowerCase().includes(q) ||
+          String(item.category || '').toLowerCase().includes(q) ||
+          String(item.brand || '').toLowerCase().includes(q) ||
+          String(item.modelNumber || '').toLowerCase().includes(q) ||
+          String(item.hsnCode || '').toLowerCase().includes(q);
 
-    return matchesGeneral || matchesSerial;
-  });
+        const matchesSerial = (item.serialNumbers || []).some((s) => {
+          const sn = typeof s === 'object' ? s?.serialNumber : s;
+          return String(sn || '').toLowerCase().includes(q);
+        });
+
+        return matchesGeneral || matchesSerial;
+      });
+  }, [monthlyReportData?.items, search]);
+
+  const totalMonthlyItems = filteredMonthlyItems.length;
+  const totalMonthlyPages = Math.max(1, Math.ceil(totalMonthlyItems / monthlyPageSize));
+  const safeMonthlyPage = Math.min(Math.max(1, monthlyPage), totalMonthlyPages);
+  const paginatedMonthlyItems = useMemo(() => {
+    const start = (safeMonthlyPage - 1) * monthlyPageSize;
+    return filteredMonthlyItems.slice(start, start + monthlyPageSize);
+  }, [filteredMonthlyItems, safeMonthlyPage, monthlyPageSize]);
 
   const handleDownloadMonthlyExcel = () => {
     if (!monthlyReportData || filteredMonthlyItems.length === 0) {
@@ -764,13 +802,12 @@ export const ProductsPage = () => {
           {/* Search bar inside Monthly Report */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="relative w-full sm:w-96">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search monthly intake by product, barcode, serial, brand..."
-                className="input-tactile text-xs pl-9 pr-3.5 py-2 w-full"
+                className="input-tactile text-xs px-3.5 py-2 w-full"
               />
             </div>
             <div className="text-xs font-medium text-slate-500">
@@ -839,7 +876,7 @@ export const ProductsPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredMonthlyItems.map((item) => {
+                  {paginatedMonthlyItems.map((item) => {
                     const isExpanded = expandedSerials[item.inventoryId];
                     const hasSerials = item.isSerialized && (item.serialNumbers || []).length > 0;
                     const specsList = extractSpecsList(item.specifications);
@@ -991,6 +1028,115 @@ export const ProductsPage = () => {
               </table>
             )}
           </div>
+
+          {/* Monthly Report Pagination Footer */}
+          {totalMonthlyItems > 0 && (
+            <div className="p-3.5 border-t border-slate-200/80 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600 rounded-b-2xl">
+              <div className="flex items-center gap-3">
+                <span>
+                  Showing <span className="font-bold text-slate-900">{(safeMonthlyPage - 1) * monthlyPageSize + 1}</span> to{' '}
+                  <span className="font-bold text-slate-900">{Math.min(safeMonthlyPage * monthlyPageSize, totalMonthlyItems)}</span> of{' '}
+                  <span className="font-bold text-slate-900">{totalMonthlyItems}</span> intake records
+                </span>
+                <div className="flex items-center gap-1.5 border-l border-slate-300 pl-3">
+                  <span className="text-[11px] text-slate-500 font-medium">Per page:</span>
+                  <select
+                    value={monthlyPageSize}
+                    onChange={(e) => {
+                      setMonthlyPageSize(Number(e.target.value));
+                      setMonthlyPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {[10, 15, 25, 50, 100].map((sz) => (
+                      <option key={sz} value={sz}>{sz}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={safeMonthlyPage <= 1}
+                  onClick={() => setMonthlyPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 font-bold transition-colors flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Prev</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {(() => {
+                    const pages = [];
+                    const maxButtons = 5;
+                    let startPage = Math.max(1, safeMonthlyPage - 2);
+                    let endPage = Math.min(totalMonthlyPages, startPage + maxButtons - 1);
+                    if (endPage - startPage < maxButtons - 1) {
+                      startPage = Math.max(1, endPage - maxButtons + 1);
+                    }
+
+                    if (startPage > 1) {
+                      pages.push(
+                        <button
+                          key={1}
+                          onClick={() => setMonthlyPage(1)}
+                          className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 font-mono font-bold text-xs"
+                        >
+                          1
+                        </button>
+                      );
+                      if (startPage > 2) {
+                        pages.push(<span key="m-dots-start" className="px-1 text-slate-400">...</span>);
+                      }
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      const isActive = i === safeMonthlyPage;
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => setMonthlyPage(i)}
+                          className={`w-7 h-7 rounded-lg font-mono font-bold text-xs transition-all ${
+                            isActive
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'border border-slate-200 bg-white hover:bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+
+                    if (endPage < totalMonthlyPages) {
+                      if (endPage < totalMonthlyPages - 1) {
+                        pages.push(<span key="m-dots-end" className="px-1 text-slate-400">...</span>);
+                      }
+                      pages.push(
+                        <button
+                          key={totalMonthlyPages}
+                          onClick={() => setMonthlyPage(totalMonthlyPages)}
+                          className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 font-mono font-bold text-xs"
+                        >
+                          {totalMonthlyPages}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                <button
+                  disabled={safeMonthlyPage >= totalMonthlyPages}
+                  onClick={() => setMonthlyPage((p) => Math.min(totalMonthlyPages, p + 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 font-bold transition-colors flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         /* RENDER STANDARD CATALOG DATA TABLE (FOR ALL, LOW_STOCK, ARCHIVED) */
@@ -1018,7 +1164,7 @@ export const ProductsPage = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map((p, index) => {
+                  {paginatedProducts.map((p, index) => {
                     const stock = p.availableStock ?? p.stock ?? p.Stock ?? 0;
                     const buyPrice = p.purchasePrice ?? 0;
                     const isLow = stock <= (p.minStockLevel || 5);
@@ -1088,6 +1234,115 @@ export const ProductsPage = () => {
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* Standard Catalog Pagination Footer */}
+          {totalProducts > 0 && (
+            <div className="p-3.5 border-t border-slate-200/80 bg-slate-50/70 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-600">
+              <div className="flex items-center gap-3">
+                <span>
+                  Showing <span className="font-bold text-slate-900">{(safeCurrentPage - 1) * pageSize + 1}</span> to{' '}
+                  <span className="font-bold text-slate-900">{Math.min(safeCurrentPage * pageSize, totalProducts)}</span> of{' '}
+                  <span className="font-bold text-slate-900">{totalProducts}</span> products
+                </span>
+                <div className="flex items-center gap-1.5 border-l border-slate-300 pl-3">
+                  <span className="text-[11px] text-slate-500 font-medium">Per page:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 outline-none focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {[10, 15, 25, 50, 100].map((sz) => (
+                      <option key={sz} value={sz}>{sz}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 font-bold transition-colors flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Prev</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {(() => {
+                    const pages = [];
+                    const maxButtons = 5;
+                    let startPage = Math.max(1, safeCurrentPage - 2);
+                    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+                    if (endPage - startPage < maxButtons - 1) {
+                      startPage = Math.max(1, endPage - maxButtons + 1);
+                    }
+
+                    if (startPage > 1) {
+                      pages.push(
+                        <button
+                          key={1}
+                          onClick={() => setCurrentPage(1)}
+                          className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 font-mono font-bold text-xs"
+                        >
+                          1
+                        </button>
+                      );
+                      if (startPage > 2) {
+                        pages.push(<span key="p-dots-start" className="px-1 text-slate-400">...</span>);
+                      }
+                    }
+
+                    for (let i = startPage; i <= endPage; i++) {
+                      const isActive = i === safeCurrentPage;
+                      pages.push(
+                        <button
+                          key={i}
+                          onClick={() => setCurrentPage(i)}
+                          className={`w-7 h-7 rounded-lg font-mono font-bold text-xs transition-all ${
+                            isActive
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'border border-slate-200 bg-white hover:bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {i}
+                        </button>
+                      );
+                    }
+
+                    if (endPage < totalPages) {
+                      if (endPage < totalPages - 1) {
+                        pages.push(<span key="p-dots-end" className="px-1 text-slate-400">...</span>);
+                      }
+                      pages.push(
+                        <button
+                          key={totalPages}
+                          onClick={() => setCurrentPage(totalPages)}
+                          className="w-7 h-7 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 font-mono font-bold text-xs"
+                        >
+                          {totalPages}
+                        </button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                <button
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  className="px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 font-bold transition-colors flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
           )}
         </div>

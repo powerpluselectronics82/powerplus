@@ -176,7 +176,7 @@ export const DuePaymentsPage = () => {
               setPage(1);
             }}
             placeholder="Search customer, phone, invoice..."
-            className="input-tactile pl-9 text-xs py-2 w-full"
+            className="input-tactile px-3.5 text-xs py-2 w-full"
           />
         </div>
 

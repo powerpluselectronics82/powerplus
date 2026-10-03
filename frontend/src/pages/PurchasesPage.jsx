@@ -76,14 +76,14 @@ export const PurchasesPage = () => {
   const filteredPurchases = useMemo(() => {
     return purchases.filter((p) => {
       const matchStatus = statusFilter === 'ALL' || (p.paymentStatus || 'PAID') === statusFilter;
-      
+
       const q = searchQuery.toLowerCase().trim();
       if (!q) return matchStatus;
 
       const invNo = (p.purchaseInvoiceNumber || '').toLowerCase();
       const supName = (p.supplierName || p.supplierId?.name || '').toLowerCase();
       const supGstin = (p.supplierGstin || p.supplierId?.gstin || '').toLowerCase();
-      
+
       const itemMatch = Array.isArray(p.items) && p.items.some((item) => {
         const name = (item.productName || item.name || '').toLowerCase();
         const barcode = (item.barcode || '').toLowerCase();
@@ -229,11 +229,10 @@ export const PurchasesPage = () => {
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1 text-[11px] font-extrabold rounded-lg transition-all ${
-                  statusFilter === st
+                className={`px-3 py-1 text-[11px] font-extrabold rounded-lg transition-all ${statusFilter === st
                     ? 'bg-white text-indigo-900 shadow-sm'
                     : 'text-slate-500 hover:text-slate-900'
-                }`}
+                  }`}
               >
                 {st}
               </button>
@@ -341,13 +340,12 @@ export const PurchasesPage = () => {
 
                       <td className="py-3.5 px-4 text-center">
                         <span
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold border ${
-                            p.paymentStatus === 'PAID'
+                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold border ${p.paymentStatus === 'PAID'
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                               : p.paymentStatus === 'UNPAID'
-                              ? 'bg-rose-50 text-rose-700 border-rose-200'
-                              : 'bg-amber-50 text-amber-700 border-amber-200'
-                          }`}
+                                ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}
                         >
                           {p.paymentStatus === 'PAID' ? (
                             <CheckCircle2 className="w-3 h-3 text-emerald-600" />
