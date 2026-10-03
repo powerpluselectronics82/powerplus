@@ -44,7 +44,6 @@ const paymentSchema = new mongoose.Schema(
       type: String,
       enum: ["CASH", "UPI", "CARD", "SPLIT", "FINANCE"],
       required: true,
-      default: "CASH",
     },
     transactionRef: {
       type: String,

@@ -625,7 +625,7 @@ const createSale = async (req, res) => {
           );
         }
       } else {
-        const validPaymentMethods = ["CASH", "UPI", "CARD", "SPLIT"];
+        const validPaymentMethods = ["CASH", "UPI", "CARD", "SPLIT", "FINANCE"];
         const primaryMethod = validPaymentMethods.includes(paymentMethod) ? paymentMethod : "CASH";
         await Payment.create(
           [

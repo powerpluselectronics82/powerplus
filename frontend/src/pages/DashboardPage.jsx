@@ -144,14 +144,15 @@ export const DashboardPage = () => {
         const splitCash = Number(s.splitDetails?.cashAmount || 0);
         const splitCard = Number(s.splitDetails?.cardAmount || 0);
         const splitUpi = Number(s.splitDetails?.upiAmount || 0);
-        if (splitCash > 0 || splitCard > 0 || splitUpi > 0) {
+        const splitFinance = Number(s.splitDetails?.financeAmount || 0);
+        if (splitCash > 0 || splitCard > 0 || splitUpi > 0 || splitFinance > 0) {
           cashAmt = splitCash;
-          digitalAmt = splitCard + splitUpi;
+          digitalAmt = splitCard + splitUpi + splitFinance;
         } else {
           cashAmt = paid / 2;
           digitalAmt = paid / 2;
         }
-      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR'].includes(method)) {
+      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR', 'FINANCE'].includes(method)) {
         digitalAmt = paid;
       } else if (method.includes('CASH')) {
         cashAmt = paid;
@@ -224,7 +225,7 @@ export const DashboardPage = () => {
       const method = String(s.paymentMethod || 'CASH').trim().toUpperCase();
       let payMethod = method;
       if (method === 'SPLIT' && s.splitDetails) {
-        payMethod = `SPLIT (Cash: ${Number(s.splitDetails.cashAmount || 0).toFixed(0)}, Card: ${Number(s.splitDetails.cardAmount || 0).toFixed(0)}, UPI: ${Number(s.splitDetails.upiAmount || 0).toFixed(0)})`;
+        payMethod = `SPLIT (Cash: ${Number(s.splitDetails.cashAmount || 0).toFixed(0)}, Card: ${Number(s.splitDetails.cardAmount || 0).toFixed(0)}, UPI: ${Number(s.splitDetails.upiAmount || 0).toFixed(0)}, Fin: ${Number(s.splitDetails.financeAmount || 0).toFixed(0)})`;
       }
 
       const grandTotal = Number(s.grandTotal || s.subtotal || 0);
@@ -252,14 +253,15 @@ export const DashboardPage = () => {
         const splitCash = Number(s.splitDetails?.cashAmount || 0);
         const splitCard = Number(s.splitDetails?.cardAmount || 0);
         const splitUpi = Number(s.splitDetails?.upiAmount || 0);
-        if (splitCash > 0 || splitCard > 0 || splitUpi > 0) {
+        const splitFinance = Number(s.splitDetails?.financeAmount || 0);
+        if (splitCash > 0 || splitCard > 0 || splitUpi > 0 || splitFinance > 0) {
           cashPortion = splitCash;
-          digitalPortion = splitCard + splitUpi;
+          digitalPortion = splitCard + splitUpi + splitFinance;
         } else {
           cashPortion = paid / 2;
           digitalPortion = paid / 2;
         }
-      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR'].includes(method)) {
+      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR', 'FINANCE'].includes(method)) {
         digitalPortion = paid;
       } else if (method.includes('CASH')) {
         cashPortion = paid;
@@ -563,6 +565,7 @@ export const DashboardPage = () => {
                         if (m === 'SPLIT' && sale.splitDetails) {
                           const c = Number(sale.splitDetails.cashAmount || 0);
                           const d = Number(sale.splitDetails.cardAmount || 0) + Number(sale.splitDetails.upiAmount || 0);
+                          const f = Number(sale.splitDetails.financeAmount || 0);
                           return (
                             <div className="flex flex-col gap-0.5">
                               <span className="badge bg-purple-100 text-purple-800 border border-purple-200 text-[10px] font-bold">
@@ -570,7 +573,8 @@ export const DashboardPage = () => {
                               </span>
                               <span className="text-[10px] font-mono text-slate-500 whitespace-nowrap">
                                 {c > 0 && `Cash: ₹${c.toFixed(0)} `}
-                                {d > 0 && `Dig: ₹${d.toFixed(0)}`}
+                                {d > 0 && `Dig: ₹${d.toFixed(0)} `}
+                                {f > 0 && `Fin: ₹${f.toFixed(0)}`}
                               </span>
                             </div>
                           );
@@ -582,7 +586,9 @@ export const DashboardPage = () => {
                                 ? 'badge-emerald'
                                 : m === 'UPI'
                                   ? 'badge-indigo'
-                                  : 'badge-purple'
+                                  : m === 'FINANCE'
+                                    ? 'badge-amber'
+                                    : 'badge-purple'
                             } text-[10px] font-bold`}
                           >
                             {m}
@@ -990,6 +996,9 @@ export const DashboardPage = () => {
                         const splitDigital = isSplit
                           ? Number(sale.splitDetails?.cardAmount || 0) + Number(sale.splitDetails?.upiAmount || 0)
                           : 0;
+                        const splitFinance = isSplit
+                          ? Number(sale.splitDetails?.financeAmount || 0)
+                          : 0;
 
                         return (
                           <tr key={sale._id} onClick={() => handleOpenInvoice(sale)} className="cursor-pointer hover:bg-slate-50">
@@ -1006,7 +1015,8 @@ export const DashboardPage = () => {
                                   </span>
                                   <span className="text-[10px] font-mono text-slate-500 whitespace-nowrap">
                                     {splitCash > 0 && `Cash: ₹${splitCash.toFixed(0)} `}
-                                    {splitDigital > 0 && `Dig: ₹${splitDigital.toFixed(0)}`}
+                                    {splitDigital > 0 && `Dig: ₹${splitDigital.toFixed(0)} `}
+                                    {splitFinance > 0 && `Fin: ₹${splitFinance.toFixed(0)}`}
                                   </span>
                                 </div>
                               ) : (
@@ -1016,7 +1026,9 @@ export const DashboardPage = () => {
                                       ? 'badge-emerald'
                                       : m === 'UPI'
                                         ? 'badge-indigo'
-                                        : 'badge-purple'
+                                        : m === 'FINANCE'
+                                          ? 'badge-amber'
+                                          : 'badge-purple'
                                   } text-[10px] font-bold`}
                                 >
                                   {m}
@@ -1110,7 +1122,8 @@ export const DashboardPage = () => {
               if (m === 'SPLIT' && sale.splitDetails) {
                 const c = Number(sale.splitDetails?.cashAmount || 0);
                 const d = Number(sale.splitDetails?.cardAmount || 0) + Number(sale.splitDetails?.upiAmount || 0);
-                payDisplay = `SPLIT (Cash: ₹${c.toFixed(0)}, Dig: ₹${d.toFixed(0)})`;
+                const f = Number(sale.splitDetails?.financeAmount || 0);
+                payDisplay = `SPLIT (Cash: ₹${c.toFixed(0)}, Dig: ₹${d.toFixed(0)}${f > 0 ? `, Fin: ₹${f.toFixed(0)}` : ''})`;
               }
 
               return (
