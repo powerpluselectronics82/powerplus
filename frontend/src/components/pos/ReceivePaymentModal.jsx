@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, CheckCircle, AlertCircle, Banknote, QrCode, CreditCard, ShieldCheck } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, Banknote, QrCode, CreditCard, ShieldCheck, Landmark } from 'lucide-react';
 import { paymentService } from '../../services/paymentService';
 import { useAuth } from '../../context/AuthContext';
 
@@ -78,7 +78,8 @@ export const ReceivePaymentModal = ({
   const paymentMethods = [
     { id: 'CASH', label: 'Cash', icon: Banknote },
     { id: 'UPI', label: 'UPI / QR', icon: QrCode },
-    { id: 'CARD', label: 'Debit / Card', icon: CreditCard },
+    { id: 'CARD', label: 'Card', icon: CreditCard },
+    { id: 'FINANCE', label: 'Finance', icon: Landmark },
   ];
 
   return (
@@ -187,7 +188,7 @@ export const ReceivePaymentModal = ({
           {/* Payment Method Selector */}
           <div className="space-y-1.5">
             <label className="block text-xs font-bold text-slate-700">Payment Method</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2">
               {paymentMethods.map((m) => {
                 const Icon = m.icon;
                 const isSelected = paymentMethod === m.id;

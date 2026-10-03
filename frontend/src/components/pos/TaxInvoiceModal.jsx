@@ -298,6 +298,7 @@ export const TaxInvoiceModal = ({ sale, isOpen, onClose, company, branch, onPaym
       if (Number(split.cashAmount) > 0) parts.push(`Cash: ₹${Number(split.cashAmount).toFixed(2)}`);
       if (Number(split.cardAmount) > 0) parts.push(`Card: ₹${Number(split.cardAmount).toFixed(2)}`);
       if (Number(split.upiAmount) > 0) parts.push(`UPI: ₹${Number(split.upiAmount).toFixed(2)}`);
+      if (Number(split.financeAmount) > 0) parts.push(`Finance: ₹${Number(split.financeAmount).toFixed(2)}`);
       return parts.length > 0 ? `SPLIT (${parts.join(', ')})` : 'SPLIT';
     }
     return method;

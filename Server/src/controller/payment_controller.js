@@ -88,7 +88,7 @@ const receivePayment = async (req, res) => {
     });
   }
 
-  const validMethods = ["CASH", "UPI", "CARD"];
+  const validMethods = ["CASH", "UPI", "CARD", "FINANCE"];
   const methodClean = validMethods.includes(paymentMethod?.toUpperCase())
     ? paymentMethod.toUpperCase()
     : "CASH";

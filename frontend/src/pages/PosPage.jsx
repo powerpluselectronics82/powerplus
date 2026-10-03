@@ -23,6 +23,7 @@ import {
   UserCheck,
   Phone,
   Tag,
+  Landmark,
 } from 'lucide-react';
 
 const getProductPrice = (product) => {
@@ -88,17 +89,19 @@ export const PosPage = () => {
   const [paidAmountInput, setPaidAmountInput] = useState('');
   const [isCustomPaid, setIsCustomPaid] = useState(false);
 
-  // Split Payment Breakdown States (Cash, Card, UPI)
+  // Split Payment Breakdown States (Cash, Card, UPI, Finance)
   const [splitAmounts, setSplitAmounts] = useState({
     cash: '',
     card: '',
     upi: '',
+    finance: '',
   });
 
   const splitCashVal = Number(splitAmounts.cash) || 0;
   const splitCardVal = Number(splitAmounts.card) || 0;
   const splitUpiVal = Number(splitAmounts.upi) || 0;
-  const splitTotalPaid = Number((splitCashVal + splitCardVal + splitUpiVal).toFixed(2));
+  const splitFinanceVal = Number(splitAmounts.finance) || 0;
+  const splitTotalPaid = Number((splitCashVal + splitCardVal + splitUpiVal + splitFinanceVal).toFixed(2));
 
   const activeBranchId = selectedBranchId || currentBranch?._id || user?.branchId;
 
@@ -448,6 +451,7 @@ export const PosPage = () => {
         cashAmount: splitCashVal,
         cardAmount: splitCardVal,
         upiAmount: splitUpiVal,
+        financeAmount: splitFinanceVal,
       } : undefined,
       items: items.map((item) => ({
         productId: item.product._id,
@@ -476,7 +480,7 @@ export const PosPage = () => {
         clearCart();
         setIsCustomPaid(false);
         setPaidAmountInput('');
-        setSplitAmounts({ cash: '', card: '', upi: '' });
+        setSplitAmounts({ cash: '', card: '', upi: '', finance: '' });
         dispatch(recordSaleInDailySummary(res.data));
         dispatch(invalidateProductCaches());
         dispatch(invalidateAnalyticsCache());
@@ -557,7 +561,7 @@ export const PosPage = () => {
   });
 
   return (
-    <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-6 h-[calc(100vh-6rem)]">
+    <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-5 h-[calc(100vh-5rem)] min-h-0 lg:overflow-hidden">
       {/* Floating Notification Toast */}
       {notification && (
         <div className="fixed top-6 right-6 z-50 max-w-md w-full px-4 animate-in slide-in-from-top-3 fade-in duration-200 pointer-events-auto">
@@ -590,10 +594,10 @@ export const PosPage = () => {
         </div>
       )}
 
-      {/* Left Column: Product Search & Grid (7 Cols) */}
-      <div className="lg:col-span-7 flex flex-col space-y-4 h-full">
-        {/* Barcode & Search Header */}
-        <div className="tactile-card p-4 space-y-3">
+      {/* Left Column: Product Search & Grid (7 Cols - Independent Scroll) */}
+      <div className="lg:col-span-7 flex flex-col space-y-3.5 h-full min-h-0">
+        {/* Barcode & Search Header (Fixed at top of catalog) */}
+        <div className="tactile-card p-4 space-y-3 shrink-0 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-extrabold text-slate-400 uppercase tracking-widest">
               Quick Barcode / Serial Scanner
@@ -635,8 +639,8 @@ export const PosPage = () => {
           )}
         </div>
 
-        {/* Product Cards Grid */}
-        <div className="tactile-card p-4 flex-1 overflow-y-auto">
+        {/* Product Cards Grid (Independent Scroll) */}
+        <div className="tactile-card p-4 flex-1 min-h-0 overflow-y-auto shadow-xs">
           {loading ? (
             <div className="p-12 text-center text-slate-400 font-semibold text-sm">
               Loading inventory products...
@@ -756,38 +760,43 @@ export const PosPage = () => {
           )}
         </div>
       </div>
-      {/* Right Column: POS Cart & Checkout Pane (5 Cols) */}
-      <div className="lg:col-span-5 flex flex-col space-y-4 h-full">
-        <div className="tactile-card p-4 flex-1 flex flex-col justify-between overflow-hidden">
-          <div>
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-3">
-              <div className="flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-indigo-600" />
-                <h3 className="font-extrabold text-slate-900 text-sm">
-                  Active POS Sale ({items.length})
-                </h3>
-              </div>
-              {items.length > 0 && (
-                <button
-                  onClick={clearCart}
-                  className="text-xs font-bold text-rose-600 hover:text-rose-800"
-                >
-                  Clear Cart
-                </button>
-              )}
+      {/* Right Column: POS Cart & Checkout Pane (5 Cols - Independent Scroll) */}
+      <div className="lg:col-span-5 flex flex-col h-full min-h-0">
+        <div className="tactile-card flex-1 min-h-0 flex flex-col overflow-hidden shadow-sm bg-white">
+          {/* Header (Pinned at top of cart) */}
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-indigo-600" />
+              <h3 className="font-extrabold text-slate-900 text-sm">
+                Active POS Sale ({items.length} {items.length === 1 ? 'item' : 'items'})
+              </h3>
             </div>
+            {items.length > 0 && (
+              <button
+                type="button"
+                onClick={clearCart}
+                className="text-xs font-bold text-rose-600 hover:text-rose-800 transition-colors"
+              >
+                Clear Cart
+              </button>
+            )}
+          </div>
 
+          {/* Scrollable Center: Customer Details, Cart Items, Payment Modes, Split & Discounts */}
+          <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3.5">
             {/* Customer Inputs */}
-            <div className="space-y-2 mb-3">
-              <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2 bg-slate-50/70 p-3 rounded-2xl border border-slate-200/80">
+              <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                Customer & Invoice Information
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="relative">
                   <input
                     type="text"
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Customer Name"
-                    className="input-tactile text-xs py-1.5 pl-3"
+                    className="input-tactile text-xs py-1.5 pl-3 bg-white"
                   />
                 </div>
                 <div className="relative">
@@ -796,7 +805,7 @@ export const PosPage = () => {
                     value={customerPhone}
                     onChange={(e) => setCustomerPhone(e.target.value)}
                     placeholder="Customer Phone"
-                    className="input-tactile text-xs py-1.5 pl-3"
+                    className="input-tactile text-xs py-1.5 pl-3 bg-white"
                   />
                 </div>
               </div>
@@ -806,10 +815,10 @@ export const PosPage = () => {
                   value={customerAddress}
                   onChange={(e) => setCustomerAddress(e.target.value)}
                   placeholder="Customer Address (Street, City, State)"
-                  className="input-tactile text-xs py-1.5 pl-3"
+                  className="input-tactile text-xs py-1.5 pl-3 bg-white"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div className="relative">
                   <input
                     type="text"
@@ -817,7 +826,7 @@ export const PosPage = () => {
                     value={customerGstin}
                     onChange={(e) => setCustomerGstin(e.target.value.toUpperCase())}
                     placeholder="Customer GSTIN - Optional"
-                    className="input-tactile text-xs py-1.5 pl-3 font-mono uppercase"
+                    className="input-tactile text-xs py-1.5 pl-3 font-mono uppercase bg-white"
                   />
                 </div>
                 <div className="relative">
@@ -827,7 +836,7 @@ export const PosPage = () => {
                     value={invoiceNumber}
                     onChange={(e) => setInvoiceNumber(e.target.value)}
                     placeholder="Invoice Number *"
-                    className="input-tactile text-xs py-1.5 pl-3 pr-7 font-mono uppercase"
+                    className="input-tactile text-xs py-1.5 pl-3 pr-7 font-mono uppercase bg-white"
                     title="Enter invoice number"
                   />
                   {invoiceNumber && (
@@ -845,9 +854,20 @@ export const PosPage = () => {
             </div>
 
             {/* Cart Items List */}
-            <div className="max-h-56 overflow-y-auto space-y-2 pr-1 mb-4">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-extrabold text-slate-500 uppercase tracking-wider">
+                  Billed Items ({items.length})
+                </span>
+                {items.length > 0 && (
+                  <span className="text-xs font-mono font-bold text-slate-700">
+                    Subtotal: ₹{totals.subtotal.toFixed(2)}
+                  </span>
+                )}
+              </div>
+
               {items.length === 0 ? (
-                <div className="p-8 text-center text-slate-400 text-xs font-semibold">
+                <div className="p-8 text-center text-slate-400 text-xs font-semibold bg-slate-50/60 rounded-2xl border border-dashed border-slate-200">
                   Cart is empty. Click items or scan barcode to add.
                 </div>
               ) : (
@@ -865,16 +885,16 @@ export const PosPage = () => {
                   return (
                     <div
                       key={itemKey}
-                      className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs"
+                      className="flex items-center justify-between p-3 bg-slate-50/90 border border-slate-200/90 rounded-2xl text-xs hover:border-slate-300 transition-colors"
                     >
-                      <div className="flex-1 pr-2">
+                      <div className="flex-1 pr-3">
                         <h5 className="font-bold text-slate-900 line-clamp-1">
                           {product.name}
                         </h5>
                         {((product.modelNumber || product.specifications?.modelNumber) || serialNumber) && (
                           <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                             {(product.modelNumber || product.specifications?.modelNumber) && (
-                              <span className="inline-block text-[10px] font-mono font-bold text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                              <span className="inline-block text-[10px] font-mono font-bold text-slate-700 bg-white px-1.5 py-0.5 rounded border border-slate-200">
                                 Model: {product.modelNumber || product.specifications?.modelNumber}
                               </span>
                             )}
@@ -885,8 +905,8 @@ export const PosPage = () => {
                             )}
                           </div>
                         )}
-                        <div className="flex flex-wrap items-center gap-2 mt-1">
-                          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded px-1.5 py-0.5 shadow-2xs">
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                          <div className="flex items-center gap-1 bg-white border border-slate-300 rounded-lg px-2 py-0.5 shadow-2xs">
                             <span className="text-[10px] font-bold text-slate-400">₹</span>
                             <input
                               type="number"
@@ -895,7 +915,7 @@ export const PosPage = () => {
                               value={manualPrice !== undefined ? manualPrice : getItemPrice(product)}
                               onChange={(e) => updateItemPrice(product._id, e.target.value, serialNumber, product.branchInventoryId || product.purchasePrice)}
                               placeholder="Price"
-                              className="w-16 text-xs font-mono font-bold text-slate-800 focus:outline-none bg-transparent"
+                              className="w-20 text-xs font-mono font-bold text-slate-800 focus:outline-none bg-transparent"
                               title="Click to manually edit selling price"
                             />
                           </div>
@@ -903,7 +923,7 @@ export const PosPage = () => {
                             × {unit} = <span className="font-bold text-slate-900">₹{(getItemPrice(product, { manualPrice }) * unit).toFixed(2)}</span>
                           </span>
                           {!product.isSerialized && Number.isFinite(itemMaxStock) && (
-                            <span className={`text-[10px] px-1 rounded font-sans font-semibold ${isAtMaxStock ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-200/70'
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-semibold ${isAtMaxStock ? 'text-amber-700 bg-amber-100' : 'text-slate-500 bg-slate-200/70'
                               }`}>
                               Stock: {itemMaxStock}
                             </span>
@@ -911,18 +931,18 @@ export const PosPage = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         {!product.isSerialized && (
-                          <div className="flex items-center bg-white border border-slate-200 rounded-lg">
+                          <div className="flex items-center bg-white border border-slate-200 rounded-xl shadow-2xs">
                             <button
                               type="button"
                               onClick={() => updateQuantity(product._id, unit - 1, product.branchInventoryId || product.purchasePrice)}
-                              className="p-1 hover:bg-slate-100 text-slate-600"
+                              className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-l-xl transition-colors"
                               title="Decrease quantity"
                             >
-                              <Minus className="w-3 h-3" />
+                              <Minus className="w-3.5 h-3.5" />
                             </button>
-                            <span className="px-2 font-mono font-bold text-slate-800">
+                            <span className="px-2.5 font-mono font-bold text-slate-800 text-xs">
                               {unit}
                             </span>
                             <button
@@ -938,13 +958,13 @@ export const PosPage = () => {
                                 }
                                 updateQuantity(product._id, unit + 1, product.branchInventoryId || product.purchasePrice);
                               }}
-                              className={`p-1 text-slate-600 ${isAtMaxStock
+                              className={`p-1.5 text-slate-600 rounded-r-xl transition-colors ${isAtMaxStock
                                 ? 'opacity-40 cursor-not-allowed hover:bg-transparent'
                                 : 'hover:bg-slate-100'
                                 }`}
                               title={isAtMaxStock ? `Stock limit (${itemMaxStock}) reached` : 'Increase quantity'}
                             >
-                              <Plus className="w-3 h-3" />
+                              <Plus className="w-3.5 h-3.5" />
                             </button>
                           </div>
                         )}
@@ -952,10 +972,10 @@ export const PosPage = () => {
                         <button
                           type="button"
                           onClick={() => removeItem(product._id, serialNumber, product.branchInventoryId || product.purchasePrice)}
-                          className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg"
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
                           title="Remove item"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -963,20 +983,18 @@ export const PosPage = () => {
                 })
               )}
             </div>
-          </div>
 
-          {/* Bottom Billing Calculation Pane */}
-          <div className="border-t border-slate-200 pt-3 space-y-3">
             {/* Payment Method Selector */}
-            <div>
+            <div className="pt-1">
               <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
                 Payment Mode
               </span>
-              <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
+              <div className="grid grid-cols-5 gap-1.5">
                 {[
                   { id: 'CASH', label: 'Cash', icon: Banknote },
                   { id: 'CARD', label: 'Card', icon: CreditCard },
                   { id: 'UPI', label: 'UPI/QR', icon: QrCode },
+                  { id: 'FINANCE', label: 'Finance', icon: Landmark },
                   { id: 'SPLIT', label: 'Split', icon: Split },
                 ].map((m) => {
                   const Icon = m.icon;
@@ -986,7 +1004,7 @@ export const PosPage = () => {
                       key={m.id}
                       type="button"
                       onClick={() => setPaymentMethod(m.id)}
-                      className={`flex items-center justify-center gap-1 sm:gap-1.5 py-1.5 px-1 rounded-xl border text-xs font-bold transition-all ${isSelected
+                      className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl border text-xs font-bold transition-all ${isSelected
                         ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                         }`}
@@ -1001,7 +1019,7 @@ export const PosPage = () => {
 
             {/* Split Payment Controls vs Single Mode Controls */}
             {paymentMethod === 'SPLIT' ? (
-              <div className="bg-indigo-50/70 p-3 rounded-2xl border border-indigo-200/80 space-y-2.5 mb-3">
+              <div className="bg-indigo-50/70 p-3 rounded-2xl border border-indigo-200/80 space-y-2.5">
                 <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
                   <span className="flex items-center gap-1.5">
                     <Split className="w-3.5 h-3.5 text-indigo-600" />
@@ -1012,7 +1030,7 @@ export const PosPage = () => {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   <div>
                     <label className="text-[10px] font-bold text-slate-600 block mb-1">
                       Cash (₹)
@@ -1057,12 +1075,27 @@ export const PosPage = () => {
                       className="input-tactile px-3 text-xs font-mono font-bold py-1.5 w-full bg-white"
                     />
                   </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-600 block mb-1">
+                      Finance (₹)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={splitAmounts.finance}
+                      onChange={(e) => setSplitAmounts(prev => ({ ...prev, finance: e.target.value }))}
+                      placeholder="0.00"
+                      className="input-tactile px-3 text-xs font-mono font-bold py-1.5 w-full bg-white"
+                    />
+                  </div>
                 </div>
 
-                {/* Paid Amount = Cash + Card + UPI Badge */}
+                {/* Paid Amount = Cash + Card + UPI + Fin Badge */}
                 <div className="pt-1 flex items-center justify-between text-xs font-mono border-t border-indigo-200/60">
                   <span className="text-slate-700 font-bold text-[11px]">
-                    Paid Amount (Cash + Card + UPI):
+                    Paid Amount (Cash + Card + UPI + Fin):
                   </span>
                   <span className="font-extrabold text-indigo-700 bg-white px-2.5 py-0.5 rounded-lg border border-indigo-200">
                     ₹{splitTotalPaid.toFixed(2)}
@@ -1090,7 +1123,7 @@ export const PosPage = () => {
               </div>
             ) : (
               /* Amount Paid & Due Controls for Single Payment Modes */
-              <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80 space-y-2 mb-3">
+              <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-200/80 space-y-2">
                 <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                   <span>Amount Paid</span>
                   <div className="flex items-center gap-1 text-[10px] font-mono">
@@ -1134,7 +1167,7 @@ export const PosPage = () => {
                       setIsCustomPaid(true);
                       setPaidAmountInput(e.target.value);
                     }}
-                    className="input-tactile px-3 text-xs font-mono font-bold py-1.5"
+                    className="input-tactile px-3 text-xs font-mono font-bold py-1.5 bg-white"
                     placeholder="Paid amount"
                   />
                 </div>
@@ -1202,8 +1235,8 @@ export const PosPage = () => {
                   <span>-₹{totals.exchangeAmount.toFixed(2)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-base font-extrabold text-slate-900 pt-2 border-t border-slate-200">
-                <span>Grand Total:</span>
+              <div className="flex justify-between text-sm font-extrabold text-slate-900 pt-1.5 border-t border-slate-200">
+                <span>Total Amount:</span>
                 <span className="text-indigo-600">₹{totals.grandTotal.toFixed(2)}</span>
               </div>
             </div>
@@ -1217,12 +1250,47 @@ export const PosPage = () => {
                 </div>
               </div>
             )}
+          </div>
 
-            {/* Complete Checkout Button */}
+          {/* 3. Sticky Checkout Footer */}
+          <div className="p-3.5 border-t border-slate-200 bg-slate-50/90 backdrop-blur-sm shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Grand Total</span>
+                <div className="text-xl font-extrabold text-indigo-700 font-mono">
+                  ₹{totals.grandTotal.toFixed(2)}
+                </div>
+              </div>
+
+              {paymentMethod === 'SPLIT' ? (
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-slate-500 block">Settlement</span>
+                  <span className="font-mono text-xs font-bold text-slate-800">
+                    Paid: <strong className="text-emerald-700">₹{splitTotalPaid.toFixed(2)}</strong>
+                    {totals.grandTotal > splitTotalPaid && (
+                      <> | Due: <strong className="text-rose-600">₹{(totals.grandTotal - splitTotalPaid).toFixed(2)}</strong></>
+                    )}
+                  </span>
+                </div>
+              ) : isCustomPaid && Number(paidAmountInput) < totals.grandTotal ? (
+                <div className="text-right">
+                  <span className="text-[10px] font-bold text-rose-600 block">Pending Due</span>
+                  <span className="font-mono text-xs font-extrabold text-rose-600">
+                    ₹{Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Full Payment</span>
+                </div>
+              )}
+            </div>
+
             <button
               onClick={handleCheckout}
               disabled={items.length === 0 || checkoutLoading}
-              className="btn-primary w-full justify-center py-3 text-sm font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-50"
+              className="btn-primary w-full justify-center py-3 text-sm font-bold shadow-lg shadow-indigo-500/30 disabled:opacity-50 cursor-pointer"
             >
               {checkoutLoading
                 ? 'Processing Sale...'
@@ -1232,7 +1300,7 @@ export const PosPage = () => {
                     : `Checkout (Paid Full ₹${Math.min(splitTotalPaid, totals.grandTotal).toFixed(2)})`
                   : isCustomPaid && Number(paidAmountInput) < totals.grandTotal
                     ? `Checkout (Pay ₹${Math.max(0, Number(paidAmountInput) || 0).toFixed(2)}, Due ₹${Math.max(0, totals.grandTotal - (Number(paidAmountInput) || 0)).toFixed(2)})`
-                    : `Checkout (₹${totals.grandTotal.toFixed(2)})`}
+                    : `Checkout • ₹${totals.grandTotal.toFixed(2)}`}
             </button>
           </div>
         </div>

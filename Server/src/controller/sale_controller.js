@@ -451,7 +451,8 @@ const createSale = async (req, res) => {
       const splitCash = Number(splitDetails.cashAmount) || 0;
       const splitCard = Number(splitDetails.cardAmount) || 0;
       const splitUpi = Number(splitDetails.upiAmount) || 0;
-      const splitSum = splitCash + splitCard + splitUpi;
+      const splitFinance = Number(splitDetails.financeAmount) || 0;
+      const splitSum = splitCash + splitCard + splitUpi + splitFinance;
       finalPaidAmount = Math.max(0, Math.min(rawPaidAmount !== undefined && rawPaidAmount !== null && rawPaidAmount !== "" ? Number(rawPaidAmount) : splitSum, grandTotal));
     } else if (rawPaidAmount !== undefined && rawPaidAmount !== null && rawPaidAmount !== "") {
       const parsedPaid = Number(rawPaidAmount);
@@ -488,8 +489,8 @@ const createSale = async (req, res) => {
           branchId,
           branchName: branch.name,
           invoiceNumber,
-          customerName: customerName || 'Walk-in Customer',
-          customerPhone: customerPhone || '9999999999',
+          customerName: customerName,
+          customerPhone: customerPhone,
           customerAddress: customerAddress || '',
           customerGstin: (customerGstin || req.body?.customerGstin || req.body?.customerGSTIN || req.body?.buyerGstin || req.body?.gstin || req.body?.customerGst || req.body?.customerGstNo || '') ? String(customerGstin || req.body?.customerGstin || req.body?.customerGSTIN || req.body?.buyerGstin || req.body?.gstin || req.body?.customerGst || req.body?.customerGstNo).trim().toUpperCase() : '',
           tollFreeNumber: topTollFree || (saleItems.find(i => i.tollFreeNumber)?.tollFreeNumber) || '',
@@ -504,11 +505,12 @@ const createSale = async (req, res) => {
           grandTotal,
           paidAmount: finalPaidAmount,
           dueAmount: finalDueAmount,
-          paymentMethod: paymentMethod || 'CASH',
+          paymentMethod: paymentMethod,
           splitDetails: paymentMethod === 'SPLIT' && splitDetails ? {
             cashAmount: Number(splitDetails.cashAmount) || 0,
             cardAmount: Number(splitDetails.cardAmount) || 0,
             upiAmount: Number(splitDetails.upiAmount) || 0,
+            financeAmount: Number(splitDetails.financeAmount) || 0,
           } : undefined,
           paymentStatus: finalPaymentStatus,
           cashierId: validCashierId,
@@ -526,6 +528,7 @@ const createSale = async (req, res) => {
         const splitCash = Number(splitDetails.cashAmount) || 0;
         const splitCard = Number(splitDetails.cardAmount) || 0;
         const splitUpi = Number(splitDetails.upiAmount) || 0;
+        const splitFinance = Number(splitDetails.financeAmount) || 0;
 
         const splitDocs = [];
         if (splitCash > 0) {
@@ -574,6 +577,23 @@ const createSale = async (req, res) => {
             paymentMethod: "UPI",
             transactionRef: transactionRef || "",
             notes: paymentNotes ? `${paymentNotes} (Split: UPI)` : "Split payment: UPI",
+            paymentDate: new Date(),
+            recordedBy: validCashierId,
+            recordedByName: validCashierName,
+          });
+        }
+        if (splitFinance > 0) {
+          splitDocs.push({
+            companyId,
+            branchId,
+            saleId: sale[0]._id,
+            invoiceNumber,
+            customerName: sale[0].customerName,
+            customerPhone: sale[0].customerPhone,
+            amountPaid: splitFinance,
+            paymentMethod: "FINANCE",
+            transactionRef: transactionRef || "",
+            notes: paymentNotes ? `${paymentNotes} (Split: Finance)` : "Split payment: Finance",
             paymentDate: new Date(),
             recordedBy: validCashierId,
             recordedByName: validCashierName,
@@ -836,8 +856,8 @@ const getBranchMonthlySales = async (req, res) => {
         cashAmt = paid;
       } else if (method === 'SPLIT' && sale.splitDetails) {
         cashAmt = Number(sale.splitDetails.cashAmount || 0);
-        digitalAmt = Number(sale.splitDetails.cardAmount || 0) + Number(sale.splitDetails.upiAmount || 0);
-      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR'].includes(method)) {
+        digitalAmt = Number(sale.splitDetails.cardAmount || 0) + Number(sale.splitDetails.upiAmount || 0) + Number(sale.splitDetails.financeAmount || 0);
+      } else if (['UPI', 'CARD', 'ONLINE', 'BANK', 'QR', 'FINANCE'].includes(method)) {
         digitalAmt = paid;
       } else if (method.includes('CASH')) {
         cashAmt = paid;

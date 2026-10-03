@@ -193,7 +193,7 @@ const SaleSchema = new mongoose.Schema(
 
     paymentMethod: {
       type: String,
-      enum: ["CASH", "UPI", "CARD", "SPLIT"],
+      enum: ["CASH", "UPI", "CARD", "SPLIT", "FINANCE"],
       required: true,
     },
 
@@ -207,6 +207,10 @@ const SaleSchema = new mongoose.Schema(
         default: 0,
       },
       cardAmount: {
+        type: Number,
+        default: 0,
+      },
+      financeAmount: {
         type: Number,
         default: 0,
       },
